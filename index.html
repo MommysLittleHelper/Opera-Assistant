@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Помощник Опера</title><link rel="stylesheet" href="/static/style.css"></head>
+<body><main><header><div class="eyebrow">MVP · v0.1</div><h1>Помощник Опера</h1><p>Создание рабочих документов из исходных данных.</p></header>
+<section class="card"><h2>1. Исходные данные</h2><input id="file" type="file" accept=".xlsx"><div id="name">Файл не выбран</div></section>
+<section class="card"><h2>2. Документ</h2><select id="doc"><option value="proработка">Проработка</option></select></section>
+<section class="card"><h2>3. Формат</h2><div>Excel (.xlsx)</div></section>
+<button id="go" disabled>Сформировать документ</button><div id="status"></div></main>
+<script>
+const file=document.getElementById('file'), name=document.getElementById('name'), go=document.getElementById('go'), status=document.getElementById('status');
+file.onchange=()=>{name.textContent=file.files[0]?.name||'Файл не выбран';go.disabled=!file.files.length;status.textContent=''};
+go.onclick=async()=>{const f=file.files[0];if(!f)return;go.disabled=true;go.textContent='Формируем…';status.textContent='';try{const fd=new FormData();fd.append('file',f);const r=await fetch('/api/generate/proработка',{method:'POST',body:fd});if(!r.ok){const e=await r.json();throw Error(e.detail||'Ошибка генерации')}const b=await r.blob(),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='Проработка_готово.xlsx';a.click();URL.revokeObjectURL(u);status.textContent='Готово. Файл отправлен на скачивание.'}catch(e){status.textContent=e.message}finally{go.disabled=false;go.textContent='Сформировать документ'}};
+</script></body></html>
