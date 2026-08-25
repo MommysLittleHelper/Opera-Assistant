@@ -1,1 +1,13 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Помощник Опера</title><link rel="stylesheet" href="style.css"></head><body><main><header><div>РАБОЧИЙ ИНСТРУМЕНТ</div><h1>Помощник Опера</h1><p>Создание документов из исходных данных прямо в браузере.</p></header><section><b>01</b><h2>Исходные данные</h2><p>Загрузите Excel-файл с данными.</p><label class="upload"><input id="file" type="file" accept=".xlsx,.xls">Выбрать Excel-файл</label><small id="fileName">Файл не выбран</small></section><section><b>02</b><h2>Документ</h2><select><option>Проработка</option></select></section><section><b>03</b><h2>Формат</h2><div class="format">Excel (.xlsx)</div></section><button id="generate" disabled>Сформировать документ</button><div id="status"></div><footer>Обработка файлов выполняется в браузере.</footer></main><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Помощник Опера</title><link rel="stylesheet" href="style.css"></head>
+<body><main>
+<header><div class="eyebrow">РАБОЧИЙ ИНСТРУМЕНТ</div><h1>Помощник Опера</h1><p>Скопируйте диапазон из Excel и вставьте его сюда.</p></header>
+<section class="card"><span class="num">01</span><h2>Данные</h2><p>В Excel выделите таблицу → Ctrl+C → вставьте ниже.</p>
+<textarea id="input" spellcheck="false" placeholder="Вставьте сюда диапазон из Excel (Ctrl+V)"></textarea>
+<div class="meta"><span id="stats">Данные не введены</span><button id="clear" class="secondary" type="button">Очистить</button></div></section>
+<section class="card"><span class="num">02</span><h2>Документ</h2><select><option>Проработка</option></select></section>
+<section class="card"><span class="num">03</span><h2>Формат</h2><div class="format">Excel (.xlsx)</div></section>
+<button id="generate" disabled>Сформировать документ</button><div id="status" role="status"></div>
+<footer>Данные обрабатываются непосредственно в браузере.</footer></main>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><script src="app.js"></script></body></html>
