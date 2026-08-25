@@ -132,7 +132,7 @@ function updateState() {
     generateBtn.disabled = dataRows.length === 0;
   }
 
-  status.innerHTML = "";
+  // Не очищаем блок результата: он может содержать ссылку на готовый файл.
 }
 
 input.addEventListener("input", updateState);
