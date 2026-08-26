@@ -28,21 +28,43 @@ function afterLabel(t,label,stops){
  let re=new RegExp(label+"\\s*[:№#-]?\\s*(.+?)(?=\\s+(?:"+stops.join("|")+")\\b|[.;]|$)","i"),m=t.match(re);return m?clean(m[1]):"";
 }
 function parse(t){
- const x=t.replace(/\r/g," ").replace(/\n/g," "), pp=passport(x), dates=dateList(x);
- const d={driver:driver(x),car:"",plate:plate(x),passportSeries:pp.series,passportNumber:pp.number,issuedBy:"",passportDate:"",
+ const x=t.replace(/\r/g," ").replace(/\n/g," ").replace(/\s+/g," ").trim(), pp=passport(x), dates=dateList(x);
+ const d={driver:driver(x),car:"",plate:"",passportSeries:pp.series,passportNumber:pp.number,issuedBy:"",passportDate:"",
  phone:phone(x),recipient:"",dt:"",do:"",jdn:"",invoice:"",invoiceDate:"",ref:"",places:"",weight:""};
- let m=x.match(/(?:газ\s+)?(?:автомобиль|авто|марка)\s+([A-ZА-ЯЁ][A-ZА-ЯЁ0-9 _-]+?)(?=\s+(?:госномер|г\.н\.з\.|телефон)|,|$)/i);
+
+ // Автомобиль: берём значение между «автомобиль» и «госномер».
+ let m=x.match(/(?:газ\s+)?автомобиль\s+(.+?)(?=\s+госномер\b)/i);
  if(m)d.car=clean(m[1]);
- m=x.match(/в адрес получателя\s+(.+?)(?=\s+(?:паспорт|ПАСПОРТ|ФИО водителя)|,?\s*ФИО)/i);if(m)d.recipient=clean(m[1]);
- m=x.match(/паспорт.*?\bвыдан\s+(.+?)(?=\s+(?:ГАЗ|АВТОМОБИЛЬ|ГОСНОМЕР|ТЕЛЕФОН|ДО|ЖДН|ИНВОЙС|ДТ)|,?\s*$)/i);if(m)d.issuedBy=clean(m[1].replace(/,\s*$/,""));
- m=x.match(/(?:дата\s+выдачи\s+паспорта|дата\s+выдачи)\s*(?:паспорта)?\s*[:\-]?\s*(\d{2}\.\d{2}\.\d{4})/i);if(m)d.passportDate=m[1];else if(dates.length)d.passportDate=dates[0];
- m=x.match(/\bДТ\s*(?:№|N|#)?\s*([0-9/;,\s]+)/i);if(m)d.dt=clean(m[1]);
- m=x.match(/\bДО\s*(?:№|N|#)?\s*([0-9/;,\s]+)/i);if(m)d.do=clean(m[1]);
- m=x.match(/(?:ЖДН|CMR)\s*(?:№|N|#)?\s*([0-9A-ZА-ЯЁ/-]+)(?:\s+от\s+(\d{2}\.\d{2}\.\d{4}))?/i);if(m)d.jdn=clean(m[1])+(m[2]?" от "+m[2]:"");
- m=x.match(/инвойс\s*(?:№|N|#)?\s*([0-9A-ZА-ЯЁ/-]+)(?:\s+от\s+(\d{2}\.\d{2}\.\d{4}))?/i);if(m){d.invoice=clean(m[1]);d.invoiceDate=m[2]||""}
+
+ // Госномер: JS \b плохо работает на стыке латиницы/кириллицы, поэтому используем lookaround.
+ m=x.match(/(?<![A-ZА-ЯЁ0-9])[A-ZА-ЯЁ]\d{3}[A-ZА-ЯЁ]{2}\d{2,3}(?![A-ZА-ЯЁ0-9])/i);
+ if(m)d.plate=m[0];
+
+ // «Кем выдан» — до следующего блока ГАЗ/АВТОМОБИЛЬ/ГОСНОМЕР/ТЕЛЕФОН.
+ m=x.match(/\bвыдан\s+(.+?)(?=\s+(?:ГАЗ\b|АВТОМОБИЛЬ\b|ГОСНОМЕР\b|ТЕЛЕФОН\b))/i);
+ if(m)d.issuedBy=clean(m[1]);
+
+ m=x.match(/(?:дата\s+выдачи\s+паспорта|дата\s+выдачи)\s*(?:паспорта)?\s*[:\-]?\s*(\d{2}\.\d{2}\.\d{4})/i);
+ if(m)d.passportDate=m[1]; else if(dates.length)d.passportDate=dates[0];
+
+ // Получатель/адрес из конструкции: «ЖДН ... (в адрес: АО ... П/П ООО ...)».
+ m=x.match(/\(\s*в\s+адрес\s*:\s*(.+?)\s*\)/i);
+ if(m)d.recipient=clean(m[1]);
+
+ // ДО и ДТ — отдельными полями, без захвата следующего текста.
+ m=x.match(/\bДО\s*(?:№|N|#)?\s*(\d+)/i); if(m)d.do=m[1];
+ m=x.match(/\bДТ\s*(?:№|N|#)?\s*([0-9]+\/[0-9]+\/[0-9]+)/i); if(m)d.dt=m[1];
+
+ // ЖДН и инвойс сохраняем с номером и датой, чтобы в документе не потерять связь.
+ m=x.match(/\bЖДН\s*(?:№|N|#)?\s*([0-9]+)(?:\s+от\s+(\d{2}\.\d{2}\.\d{4}))?/i);
+ if(m)d.jdn=m[2]?`№${m[1]} от ${m[2]}`:`№${m[1]}`;
+ m=x.match(/\bИНВОЙС\s*(?:№|N|#)?\s*([0-9A-ZА-ЯЁ/-]+)(?:\s+от\s+(\d{2}\.\d{2}\.\d{4}))?/i);
+ if(m){d.invoice=m[1];d.invoiceDate=m[2]||""}
+
  m=x.match(/\bREF\s+([A-Z0-9-]+(?:\s*;\s*[A-Z0-9-]+)*)/i);if(m)d.ref=clean(m[1]);
- m=x.match(/количество\s+мест\s+([0-9]+)/i);if(m)d.places=m[1];
- m=x.match(/вес\s+брутто\s+(.+?)(?=\s+КГ\b|$)/i);if(m)d.weight=clean(m[1])+" КГ";
+ m=x.match(/количество\s+мест\s*[:№#-]?\s*([0-9]+)/i);if(m)d.places=m[1];
+ m=x.match(/вес\s+брутто\s*[:№#-]?\s*([0-9]+(?:[,.][0-9]+)?)\s*(?:КГ|кг)?/i);if(m)d.weight=clean(m[1])+(m[0].match(/кг/i)?" КГ":"");
+
  const now=new Date(),pad=n=>String(n).padStart(2,"0"),today=`${pad(now.getDate())}.${pad(now.getMonth()+1)}.${now.getFullYear()}`;
  const expiry=new Date(now);expiry.setFullYear(expiry.getFullYear()+1);expiry.setMonth(expiry.getMonth()+1);expiry.setDate(expiry.getDate()+1);
  d.today=today;d.expiry=`${pad(expiry.getDate())}.${pad(expiry.getMonth()+1)}.${expiry.getFullYear()}`;
