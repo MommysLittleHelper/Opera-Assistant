@@ -67,7 +67,7 @@ function parse(t){
       d.recipient=clean(recipient);
     }
   }
-  d.recipient=d.recipient.replace(/\s*П\/П\s+.+$/i,"").replace(/^АО\s*[«"“]?ЛОГИСТИКА[-–—\s]+ТЕРМИНАЛ[»"”]?\s*/i,"").trim();
+  d.recipient=d.recipient.replace(/^АО\s*[«"“]?ЛОГИСТИКА[-–—\s]+ТЕРМИНАЛ[»"”]?\s*/i,"").replace(/^П\/П\s+/i,"").trim();
 
   d.invoice=between(["инвойс"],["дт"]);
   m=x.match(/ИНВОЙС\s*(?:№\s*)?([0-9A-ZА-ЯЁ/-]+)(?:\s+от\s+(\d{2}\.\d{2}\.\d{4}))?/i);
@@ -133,7 +133,7 @@ function setDateByLabel(doc,label,value){
   return false;
 }
 async function fillDoc(d){
-  const r=await fetch("Заявка и доверенность шаблон.docx",{cache:"no-store"});
+  const r=await fetch("template.docx",{cache:"no-store"});
   if(!r.ok)throw Error("Не найден Word-шаблон.");
   const zip=await JSZip.loadAsync(await r.arrayBuffer());
   const file=zip.file("word/document.xml");
