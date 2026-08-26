@@ -78,54 +78,71 @@ async function fillDoc(d){
   const r=await fetch("Заявка и доверенность шаблон.docx",{cache:"no-store"});
   if(!r.ok)throw Error("Не найден Word-шаблон.");
   const zip=await JSZip.loadAsync(await r.arrayBuffer());
-  const xml=await zip.file("word/document.xml").async("string");
+  const file=zip.file("word/document.xml");
+  if(!file)throw Error("В Word-шаблоне не найден document.xml.");
+  const xml=await file.async("string");
   const doc=new DOMParser().parseFromString(xml,"application/xml");
   if(doc.getElementsByTagName("parsererror").length)throw Error("Не удалось прочитать Word-шаблон.");
-  const ps=Array.from(doc.getElementsByTagNameNS(NS,"p")), t=i=>ps[i];
 
-  // Заявка: заполняем именно существующие места шаблона.
-  setTextAt(t(2),1,d.car);setTextAt(t(2),4,d.plate);
-  setTextAt(t(3),2,d.recipient);setTextAt(t(4),1,d.driver);
-  setTextAt(t(5),1,d.passportSeries);setTextAt(t(5),4,d.passportNumber);
-  setTextAt(t(5),7,d.issuedBy);setTextAt(t(5),9,d.passportDate);
-  setTextAt(t(6),3,d.phone);
-  setTextAt(t(19),5,d.dt);setTextAt(t(20),1,d.do);setTextAt(t(22),5,d.jdn);
-  setTextAt(t(23),5,d.invoice);setTextAt(t(24),2,d.ref);
-  setTextAt(t(25),3,d.places);setTextAt(t(26),2,d.weight);setTextAt(t(28),1,d.today);
+  const ps=Array.from(doc.getElementsByTagNameNS(NS,"p"));
+  const paragraph=i=>ps[i]||null;
+  const setP=(i,idx,val)=>{const p=paragraph(i);if(p)setTextAt(p,idx,val)};
+
+  // Заявка. Проверяем существование абзаца перед обращением к нему.
+  setP(2,1,d.car);setP(2,4,d.plate);
+  setP(3,2,d.recipient);setP(4,1,d.driver);
+  setP(5,1,d.passportSeries);setP(5,4,d.passportNumber);
+  setP(5,7,d.issuedBy);setP(5,9,d.passportDate);
+  setP(6,3,d.phone);
+  setP(19,5,d.dt);setP(20,1,d.do);setP(22,5,d.jdn);
+  setP(23,5,d.invoice);setP(24,2,d.ref);
+  setP(25,3,d.places);setP(26,4,d.weight);setP(28,1,d.today);
 
   const tables=Array.from(doc.getElementsByTagNameNS(NS,"tbl"));
-  const rows=tbl=>Array.from(tbl.children).filter(n=>n.localName==="tr");
-  const cells=row=>Array.from(row.children).filter(n=>n.localName==="tc");
+  const rows=tbl=>tbl?Array.from(tbl.children).filter(n=>n.localName==="tr"):[];
+  const cells=row=>row?Array.from(row.children).filter(n=>n.localName==="tc"):[];
+  const put=(row,index,val)=>{const c=cells(row);if(c[index])cellText(c[index],val)};
 
-  // Таблица доверенности: сегодняшняя дата слева и дата + 1 год + 1 месяц + 1 день справа.
+  // Таблица 0: верхняя часть доверенности.
   if(tables[0]){
-    const c=cells(rows(tables[0])[1]);
-    cellText(c[1],d.today);
-    cellText(c[2],d.today);
-    cellText(c[4],d.expiry);
-    cellText(c[7],"Водитель "+(d.driver||""));
+    const rr=rows(tables[0]);
+    if(rr[1]){
+      put(rr[1],1,d.today);
+      put(rr[1],2,d.expiry);
+      put(rr[1],3,"Водитель "+(d.driver||""));
+    }
+    // Две даты также есть в нижней части этого же документа.
+    if(rr[14])put(rr[14],1,d.today);
+    if(rr[15])put(rr[15],1,d.expiry);
   }
+
+  // Таблица 1: реквизиты доверенности.
   if(tables[1]){
     const rr=rows(tables[1]);
-    let c=cells(rr[2]);cellText(c[4],d.driver);
-    c=cells(rr[4]);cellText(c[1],d.passportSeries);cellText(c[3],d.passportNumber);
-    c=cells(rr[5]);cellText(c[1],d.issuedBy);
-    c=cells(rr[6]);cellText(c[1],d.passportDate);
-    c=cells(rr[7]);cellText(c[2],d.recipient);
-    c=cells(rr[9]);cellText(c[2],"ДТ "+(d.dt||""));
-  }
-  if(tables[2]){
-    const rr=rows(tables[2]); if(rr[1]){const c=cells(rr[1]);cellText(c[3],d.places||"")}
+    if(rr[2])put(rr[2],4,d.driver);
+    if(rr[4]){put(rr[4],1,d.passportSeries);put(rr[4],3,d.passportNumber)}
+    if(rr[5])put(rr[5],1,d.issuedBy);
+    if(rr[6])put(rr[6],1,d.passportDate);
+    if(rr[7])put(rr[7],1,d.recipient);
+    if(rr[9])put(rr[9],2,"ДТ "+(d.dt||""));
   }
 
-  // Убираем жёлтые пометки после подстановки.
-  const yellow="FFFF00";
-  doc.querySelectorAll("*").forEach(el=>{
-    if(el.namespaceURI===NS && (el.localName==="shd" || el.localName==="highlight")){
-      if(el.getAttributeNS(NS,"fill")===yellow || el.getAttributeNS(NS,"val")==="yellow"){
-        el.parentNode.removeChild(el);
-      }
-    }
+  // Таблица 2: количество мест.
+  if(tables[2]){
+    const rr=rows(tables[2]);
+    if(rr[1])put(rr[1],3,d.places||"");
+  }
+
+  // Убираем жёлтую разметку шаблона после заполнения.
+  const marks=Array.from(doc.getElementsByTagNameNS(NS,"shd"));
+  marks.forEach(el=>{
+    const fill=el.getAttributeNS(NS,"fill")||el.getAttribute("w:fill");
+    if(String(fill||"").toUpperCase()==="FFFF00" && el.parentNode)el.parentNode.removeChild(el);
+  });
+  const highlights=Array.from(doc.getElementsByTagNameNS(NS,"highlight"));
+  highlights.forEach(el=>{
+    const val=el.getAttributeNS(NS,"val")||el.getAttribute("w:val");
+    if(String(val||"").toLowerCase()==="yellow" && el.parentNode)el.parentNode.removeChild(el);
   });
 
   const out=new XMLSerializer().serializeToString(doc);
