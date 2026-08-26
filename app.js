@@ -59,7 +59,7 @@ function parse(t){
   // Получатель: в тексте может быть «в адрес: ... П/П ...».
   d.recipient=between(["в адрес:","адрес получателя"],["инвойс","дт"]);
   if(!d.recipient){m=x.match(/в адрес:\s*(.+?)(?=\s+ИНВОЙС\b|\s+ДТ\b|$)/i);if(m)d.recipient=clean(m[1])}
-  d.recipient=d.recipient.replace(/\s*П\/П\s+.+$/i,"").trim();
+  d.recipient=d.recipient.replace(/\s*П\/П\s+.+$/i,"").replace(/^АО\s*[«"“]?ЛОГИСТИКА[-–—\s]+ТЕРМИНАЛ[»"”]?\s*/i,"").trim();
 
   d.invoice=between(["инвойс"],["дт"]);
   m=x.match(/ИНВОЙС\s*(?:№\s*)?([0-9A-ZА-ЯЁ/-]+)(?:\s+от\s+(\d{2}\.\d{2}\.\d{4}))?/i);
@@ -103,7 +103,9 @@ function setNodeText(root,value){
   for(let i=1;i<ts.length;i++)ts[i].textContent="";
 }
 function setTextAt(paragraph,index,value){const ts=textNodes(paragraph);if(ts[index])ts[index].textContent=value||""}
+function setAllText(paragraph,value){const ts=textNodes(paragraph);if(!ts.length)return;ts[0].textContent=value||"";for(let i=1;i<ts.length;i++)ts[i].textContent=""}
 function cellText(cell,value){setNodeText(cell,value)}
+function dateCell(cell,value){const ts=textNodes(cell);if(!ts.length)return;ts[0].textContent=value||"";for(let i=1;i<ts.length;i++)ts[i].textContent=""}
 async function fillDoc(d){
   const r=await fetch("Заявка и доверенность шаблон.docx",{cache:"no-store"});
   if(!r.ok)throw Error("Не найден Word-шаблон.");
@@ -136,17 +138,17 @@ async function fillDoc(d){
   if(tables[0]){
     const rr=rows(tables[0]);
     if(rr[1]){
-      put(rr[1],1,d.today);
-      put(rr[1],2,d.expiry);
+      if(cells(rr[1])[1])dateCell(cells(rr[1])[1],d.today);
+      if(cells(rr[1])[2])dateCell(cells(rr[1])[2],d.expiry);
       put(rr[1],3,"Водитель "+(d.driver||""));
     }
-    if(rr[14])put(rr[14],1,d.today);
-    if(rr[15])put(rr[15],1,d.expiry);
+    if(rr[14] && cells(rr[14])[1])dateCell(cells(rr[14])[1],d.today);
+    if(rr[15] && cells(rr[15])[1])dateCell(cells(rr[15])[1],d.expiry);
   }
 
   // Дополнительные даты находятся также в обычных абзацах шаблона.
-  setP(93,0,d.today);
-  setP(97,0,d.expiry);
+  setAllText(paragraph(93),d.today);
+  setAllText(paragraph(97),d.expiry);
 
   if(tables[1]){
     const rr=rows(tables[1]);
