@@ -58,7 +58,13 @@ function parse(t){
 
   // Получатель: в тексте может быть «в адрес: ... П/П ...».
   d.recipient=between(["в адрес:","адрес получателя"],["инвойс","дт"]);
-  if(!d.recipient){m=x.match(/в адрес:\s*(.+?)(?=\s+ИНВОЙС\b|\s+ДТ\b|$)/i);if(m)d.recipient=clean(m[1])}
+  if(!d.recipient){  const am=x.match(/в адрес\s*:\s*(.+?)(?=\s*\)\s*,?|\s*,?\s*инвойс\b|\s*,?\s*ДТ\b|$)/i);
+  if(am){
+    let recipient=clean(am[1]);
+    recipient=recipient.replace(/^АО\s*["«]?ЛОГИСТИКА-ТЕРМИНАЛ["»]?\s*/i,"");
+    recipient=recipient.replace(/^П\/П\s*/i,"");
+    d.recipient=clean(recipient);
+  }
   d.recipient=d.recipient.replace(/\s*П\/П\s+.+$/i,"").replace(/^АО\s*[«"“]?ЛОГИСТИКА[-–—\s]+ТЕРМИНАЛ[»"”]?\s*/i,"").trim();
 
   d.invoice=between(["инвойс"],["дт"]);
@@ -106,6 +112,24 @@ function setTextAt(paragraph,index,value){const ts=textNodes(paragraph);if(ts[in
 function setAllText(paragraph,value){const ts=textNodes(paragraph);if(!ts.length)return;ts[0].textContent=value||"";for(let i=1;i<ts.length;i++)ts[i].textContent=""}
 function cellText(cell,value){setNodeText(cell,value)}
 function dateCell(cell,value){const ts=textNodes(cell);if(!ts.length)return;ts[0].textContent=value||"";for(let i=1;i<ts.length;i++)ts[i].textContent=""}
+function setDateByLabel(doc,label,value){
+  const ps=Array.from(doc.getElementsByTagNameNS(NS,"p"));
+  for(const p of ps){
+    const ts=Array.from(p.getElementsByTagNameNS(NS,"t"));
+    const full=ts.map(n=>n.textContent||"").join("");
+    if(full.includes(label)){
+      // Не дублируем дату при повторном формировании.
+      const idx=full.indexOf(label)+label.length;
+      let rest=full.slice(idx).replace(/^\s*[:\-]?\s*/,"");
+      if(ts.length){
+        const last=ts[ts.length-1];
+        last.textContent=(last.textContent||"").replace(/\s*\d{2}\.\d{2}\.\d{4}\s*$/,"")+" "+value;
+      }
+      return true;
+    }
+  }
+  return false;
+}
 async function fillDoc(d){
   const r=await fetch("Заявка и доверенность шаблон.docx",{cache:"no-store"});
   if(!r.ok)throw Error("Не найден Word-шаблон.");
@@ -146,9 +170,9 @@ async function fillDoc(d){
     if(rr[15] && cells(rr[15])[1])dateCell(cells(rr[15])[1],d.expiry);
   }
 
-  // Дополнительные даты находятся также в обычных абзацах шаблона.
-  setAllText(paragraph(93),d.today);
-  setAllText(paragraph(97),d.expiry);
+  // Даты доверенности: ищем подписи в самом шаблоне, а не полагаемся на номера абзацев.
+  setDateByLabel(doc,"Дата выдачи",d.today);
+  setDateByLabel(doc,"Доверенность действительна по",d.expiry);
 
   if(tables[1]){
     const rr=rows(tables[1]);
