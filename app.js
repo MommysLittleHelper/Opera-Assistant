@@ -6,6 +6,13 @@ function clean(s){return String(s||"").replace(/\u00a0/g," ").replace(/[ \t]+/g,
 function normalizeText(s){return String(s||"").replace(/\r/g," ").replace(/\n/g," ").replace(/\u00a0/g," ").replace(/\s+/g," ").trim()}
 function dateList(t){return [...String(t||"").matchAll(/\b\d{2}\.\d{2}\.\d{4}\b/g)].map(m=>m[0])}
 function phone(t){const m=String(t||"").match(/(?:\+7|8)\s*\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/);return m?clean(m[0]):""}
+const n=v=>String(v??"").replace(/\uFEFF/g,"").replace(/\u00a0/g," ").trim().toLowerCase().replace(/\s+/g," ");
+const parseTable=t=>t.replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n").map(x=>x.split("\t").map(y=>y.trim())).filter(r=>r.some(x=>x!==""));
+const aliases={"номер ктк":["номер ктк","ктк"],ref:["ref","реф","букинг"],статус:["статус","клиент"],"фактический объем, м3":["фактический объем, м3","фактический объем м3","объем м3","объем, м3"],"вес, кг":["вес, кг","вес кг","вес"],"кол-во мест":["кол-во мест","количество мест","мест"]};
+function col(headers,key,dict=aliases){let h=headers.map(n),o=(dict[key]||[key]).map(n),i=h.findIndex(x=>o.includes(x));return i>=0?i:h.findIndex(x=>x&&o.some(y=>x.includes(y)||y.includes(x)))}
+function total(r){let s=r.map(n).filter(Boolean).join(" ");return !s||/итого|всего|total/i.test(s)||(!n(r[0])&&!n(r[10]))}
+
+const Proработка={update(){let r=parseTable(input.value);if(!r.length){stats.textContent="Данные не введены";generate.disabled=true;return}let req=["номер ктк","ref","статус","фактический объем, м3","вес, кг","кол-во мест"],miss=req.filter(k=>col(r[0],k)<0),data=r.slice(1).filter(x=>!total(x));stats.textContent=miss.length?`${data.length} строк · не найдены: ${miss.join(", ")}`:`${data.length} записей · ${r[0].length} столбцов · все необходимые поля найдены`;generate.disabled=!!miss.length||!data.length},async build(){let r=parseTable(input.value),req=["номер ктк","ref","статус","фактический объем, м3","вес, кг","кол-во мест"],src={};req.forEach(k=>src[k]=col(r[0],k));if(Object.values(src).some(x=>x<0))throw Error("Не найдены необходимые поля");let data=r.slice(1).filter(x=>!total(x)),res=await fetch("проработка.xlsx",{cache:"no-store"});if(!res.ok)throw Error("Не найден шаблон «проработка.xlsx».");let wb=XLSX.read(new Uint8Array(await res.arrayBuffer()),{type:"array",cellStyles:true}),sh=wb.Sheets[wb.SheetNames[0]],rg=XLSX.utils.decode_range(sh["!ref"]),heads=[];for(let c=rg.s.c;c<=rg.e.c;c++)heads.push(sh[XLSX.utils.encode_cell({r:rg.s.r,c})]?.v??"");let dst={};req.forEach(k=>dst[k]=col(heads,k));if(Object.values(dst).some(x=>x<0))throw Error("В шаблоне не найдена необходимая колонка");data.forEach((row,i)=>req.forEach(k=>{let v=String(row[src[k]]??"").trim(),a=XLSX.utils.encode_cell({r:rg.s.r+1+i,c:dst[k]});sh[a]=/^-?\d+(?:[.,]\d+)?$/.test(v.replace(/\s/g,""))?{t:"n",v:Number(v.replace(/\s/g,"").replace(",","."))}:{t:"s",v}}));let out=XLSX.write(wb,{bookType:"xlsx",type:"array",cellStyles:true}),ktk=String(data[0]?.[src["номер ктк"]]||"готово").replace(/\//g,"").replace(/[\\:*?"<>|]/g,"");return{blob:new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),filename:`Проработка_${ktk||"готово"}.xlsx`,text:`Сформировано записей: ${data.length}`}}};
 function parse(t){
   const x=normalizeText(t);
   const low=x.toLocaleLowerCase("ru-RU");
@@ -203,9 +210,23 @@ async function fillDoc(d){
   // Нижние поля правой страницы получают ровно те же значения:
   // «Дата выдачи» = дата выдачи из верхней таблицы,
   // «Доверенность действительна по» = срок действия из верхней таблицы.
+  // Левая страница: дата ставится в существующее поле «Дата:».
   setParagraphByText(doc,"Дата:",d.today);
-  setParagraphByText(doc,"Дата выдачи:",d.today);
-  setParagraphByText(doc,"Доверенность действительна по:",d.expiry);
+
+  // Правая страница: обе нижние даты находятся в таблице 0.
+  // Используем те же значения, что и в верхней строке, без поиска
+  // по тексту абзацев — это исключает смещение дат.
+  if(tables[0]){
+    const rr=rows(tables[0]);
+    if(rr[14]){
+      const c=cells(rr[14]);
+      if(c[1])dateCell(c[1],d.today);
+    }
+    if(rr[15]){
+      const c=cells(rr[15]);
+      if(c[1])dateCell(c[1],d.expiry);
+    }
+  }
 
   if(tables[1]){
     const rr=rows(tables[1]);
@@ -238,8 +259,8 @@ async function fillDoc(d){
 }
 async function downloadDoc(){const r=await fillDoc(values());if(blobUrl)URL.revokeObjectURL(blobUrl);blobUrl=URL.createObjectURL(r.blob);status.innerHTML=`<div class="result"><strong>✓ Word-документ готов</strong><a class="download-link" href="${blobUrl}" download="${r.filename}">Скачать ${r.filename}</a></div>`}
 function update(){generate.disabled=!input.value.trim();if(input.value.trim())stats.textContent="Текст готов к распознаванию";else stats.textContent="Данные не введены"}
-tool.onchange=()=>{mode=tool.value;help.textContent=mode==="проработка"?"Вставьте диапазон из Excel.":"Порядок сведений не важен — Помощник распознает поля по структуре текста.";format.textContent=mode==="проработка"?"Excel (.xlsx)":"Word (.docx)";generate.textContent=mode==="проработка"?"Сформировать документ":"Распознать данные";input.value="";document.getElementById("parsedFields").hidden=true;update()};
-input.oninput=()=>{update();if(!document.getElementById("parsedFields").hidden)stats.textContent="Текст изменён — нажмите «Обновить распознанные данные»"};
+tool.onchange=()=>{mode=tool.value;help.textContent=mode==="проработка"?"Вставьте диапазон из Excel.":"Порядок сведений не важен — Помощник распознает поля по структуре текста.";format.textContent=mode==="проработка"?"Excel (.xlsx)":"Word (.docx)";generate.textContent=mode==="проработка"?"Сформировать документ":"Распознать данные";input.value="";document.getElementById("parsedFields").hidden=true;if(mode==="проработка")Proработка.update();else update()};
+input.oninput=()=>{if(mode==="проработка")Proработка.update();else{update();if(!document.getElementById("parsedFields").hidden)stats.textContent="Текст изменён — нажмите «Обновить распознанные данные»"}};
 if(refreshParsed)refreshParsed.onclick=()=>{if(!input.value.trim())return;status.innerHTML="";render(parse(input.value));};
-clear.onclick=()=>{input.value="";document.getElementById("parsedFields").hidden=true;status.innerHTML="";update()};
-generate.onclick=async()=>{generate.disabled=true;try{if(mode==="проработка")throw Error("Проработка в этой версии не изменялась. Для теста выберите «Заявка + Доверенность».");if(document.getElementById("parsedFields").hidden){render(parse(input.value));generate.disabled=false}else await downloadDoc()}catch(e){status.innerHTML=`<div class="error"><strong>Ошибка</strong><br>${e.message}</div>`;generate.disabled=false}};
+clear.onclick=()=>{input.value="";document.getElementById("parsedFields").hidden=true;status.innerHTML="";if(mode==="проработка")Proработка.update();else update()};
+generate.onclick=async()=>{generate.disabled=true;try{if(mode==="проработка"){const r=await Proработка.build();if(blobUrl)URL.revokeObjectURL(blobUrl);blobUrl=URL.createObjectURL(r.blob);status.innerHTML=`<div class="result"><strong>✓ Excel готов</strong><span>${r.text}</span><a class="download-link" href="${blobUrl}" download="${r.filename}">Скачать ${r.filename}</a></div>`;generate.disabled=false;return}if(document.getElementById("parsedFields").hidden){render(parse(input.value));generate.disabled=false}else await downloadDoc()}catch(e){status.innerHTML=`<div class="error"><strong>Ошибка</strong><br>${e.message}</div>`;generate.disabled=false}};
