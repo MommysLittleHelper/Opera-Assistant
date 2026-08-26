@@ -64,7 +64,7 @@ function parse(t){
     let recipient=clean(am[1]);
     recipient=recipient.replace(/^АО\s*["«]?ЛОГИСТИКА-ТЕРМИНАЛ["»]?\s*/i,"");
     recipient=recipient.replace(/^П\/П\s*/i,"");
-      d.recipient=clean(recipient);
+      d.recipient=clean(recipient).replace(/[),.;:]+$/g,"").trim();
     }
   }
   d.recipient=d.recipient.replace(/^АО\s*[«"“]?ЛОГИСТИКА[-–—\s]+ТЕРМИНАЛ[»"”]?\s*/i,"").replace(/^П\/П\s+/i,"").trim();
@@ -114,25 +114,60 @@ function setTextAt(paragraph,index,value){const ts=textNodes(paragraph);if(ts[in
 function setAllText(paragraph,value){const ts=textNodes(paragraph);if(!ts.length)return;ts[0].textContent=value||"";for(let i=1;i<ts.length;i++)ts[i].textContent=""}
 function cellText(cell,value){setNodeText(cell,value)}
 function dateCell(cell,value){const ts=textNodes(cell);if(!ts.length)return;ts[0].textContent=value||"";for(let i=1;i<ts.length;i++)ts[i].textContent=""}
-function setDateByLabel(doc,label,value){
-  const ps=Array.from(doc.getElementsByTagNameNS(NS,"p"));
+function setLeftPageDate(doc,value){
+  const ps=[...doc.getElementsByTagNameNS(NS,"p")];
+  // Первая страница заканчивается до текста «Номер доверенност».
+  // Ищем ранний абзац с датой/полем даты и не затрагиваем правую страницу.
   for(const p of ps){
-    const ts=Array.from(p.getElementsByTagNameNS(NS,"t"));
+    const ts=[...p.getElementsByTagNameNS(NS,"t")];
     const full=ts.map(n=>n.textContent||"").join("");
-    if(full.includes(label)){
-      // Не дублируем дату при повторном формировании.
-      const idx=full.indexOf(label)+label.length;
-      let rest=full.slice(idx).replace(/^\s*[:\-]?\s*/,"");
-      if(ts.length){
-        const last=ts[ts.length-1];
-        last.textContent=(last.textContent||"").replace(/\s*\d{2}\.\d{2}\.\d{4}\s*$/,"")+" "+value;
-      }
+    if(!/дата/i.test(full)) continue;
+    // Только абзацы до появления заголовка доверенности.
+    const joinedBefore=ps.slice(0,ps.indexOf(p)+1)
+      .map(q=>[...q.getElementsByTagNameNS(NS,"t")].map(n=>n.textContent||"").join("")).join(" ");
+    if(/ДОВЕРЕННОСТЬ/i.test(joinedBefore)) break;
+    // Если в этом абзаце уже есть дата — не дублируем.
+    if(/\b\d{2}\.\d{2}\.\d{4}\b/.test(full)) continue;
+    if(ts.length){
+      ts[ts.length-1].textContent=(ts[ts.length-1].textContent||"")+" "+value;
       return true;
     }
   }
   return false;
 }
-async function fillDoc(d){
+function setDateByLabel(doc,label,value){
+  const ps=[...doc.getElementsByTagNameNS(NS,"p")];
+  for(const p of ps){
+    const ts=[...p.getElementsByTagNameNS(NS,"t")];
+    const full=ts.map(n=>n.textContent||"").join("");
+    if(!full.includes(label)) continue;
+
+    // Удаляем уже имеющуюся дату после подписи, чтобы при повторном
+    // формировании не получать 26.08.2026 26.08.2026.
+    const pos=full.indexOf(label)+label.length;
+    const tail=full.slice(pos);
+    const cleanedTail=tail.replace(/^\s*[:\-]?\s*\d{2}\.\d{2}\.\d{4}/,"");
+    const target=ts[ts.length-1];
+    if(!target) return true;
+
+    // Для шаблонов, где дата находится отдельным run, очищаем runs после label.
+    let seen=false;
+    for(const t of ts){
+      const val=t.textContent||"";
+      if(!seen && val.includes(label)){
+        seen=true;
+        const at=val.indexOf(label)+label.length;
+        t.textContent=val.slice(0,at);
+      } else if(seen) {
+        t.textContent="";
+      }
+    }
+    // Если label и дата в одном абзаце, добавляем дату в последний run.
+    ts[ts.length-1].textContent=(ts[ts.length-1].textContent||"")+" "+value;
+    return true;
+  }
+  return false;
+}async function fillDoc(d){
   const r=await fetch("template.docx",{cache:"no-store"});
   if(!r.ok)throw Error("Не найден Word-шаблон.");
   const zip=await JSZip.loadAsync(await r.arrayBuffer());
@@ -173,6 +208,7 @@ async function fillDoc(d){
   }
 
   // Даты доверенности: ищем подписи в самом шаблоне, а не полагаемся на номера абзацев.
+  setLeftPageDate(doc,d.today);
   setDateByLabel(doc,"Дата выдачи",d.today);
   setDateByLabel(doc,"Доверенность действительна по",d.expiry);
 
