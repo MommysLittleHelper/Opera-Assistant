@@ -57,17 +57,26 @@ function parse(t){
   else {m=x.match(/(?:ЖДН|CMR(?:\(ЖДН\))?)\s*(?:№\s*)*([0-9]+)/i);if(m)d.jdn=`№${m[1]}`}
 
   // Получатель: в тексте может быть «в адрес: ... П/П ...».
-  d.recipient=between(["в адрес:","адрес получателя"],["инвойс","дт"]);
-  if(!d.recipient){
-    const am=x.match(/в адрес\s*:\s*(.+?)(?=\s*\)\s*,?|\s*,?\s*инвойс\b|\s*,?\s*ДТ\b|$)/i);
-    if(am){
-    let recipient=clean(am[1]);
-    recipient=recipient.replace(/^АО\s*["«]?ЛОГИСТИКА-ТЕРМИНАЛ["»]?\s*/i,"");
-    recipient=recipient.replace(/^П\/П\s*/i,"");
-      d.recipient=clean(recipient).replace(/[),.;:]+$/g,"").trim();
-    }
+  // Получатель: берём только текст между «в адрес получателя» и следующим
+  // полем, а затем убираем служебный адрес терминала и П/П.
+  let rm=x.match(/(?:в\s+адрес\s*:\s*|в\s+адрес\s+получателя\s+)(.+?)(?=\s+(?:ФИО\s+водителя|водитель\b|паспорт\b|тел\.?\b|инвойс\b|дт\b|до\b|ждн\b|cmr\b)|$)/i);
+  if(rm){
+    let recipient=clean(rm[1]);
+    recipient=recipient
+      .replace(/^АО\s*[«"“]?ЛОГИСТИКА[-–—\s]+ТЕРМИНАЛ[»"”]?\s*/i,"")
+      .replace(/^П\/П\s*/i,"")
+      .replace(/[\s),.;:]+$/g,"")
+      .trim();
+    d.recipient=recipient;
   }
-  d.recipient=d.recipient.replace(/^АО\s*[«"“]?ЛОГИСТИКА[-–—\s]+ТЕРМИНАЛ[»"”]?\s*/i,"").replace(/^П\/П\s+/i,"").trim();
+  if(!d.recipient){
+    d.recipient=between(["в адрес:","адрес получателя"],["фио водителя","паспорт","тел.","телефон","инвойс","дт","до","ждн","cmr"]);
+    d.recipient=d.recipient
+      .replace(/^АО\s*[«"“]?ЛОГИСТИКА[-–—\s]+ТЕРМИНАЛ[»"”]?\s*/i,"")
+      .replace(/^П\/П\s*/i,"")
+      .replace(/[\s),.;:]+$/g,"")
+      .trim();
+  }
 
   d.invoice=between(["инвойс"],["дт"]);
   m=x.match(/ИНВОЙС\s*(?:№\s*)?([0-9A-ZА-ЯЁ/-]+)(?:\s+от\s+(\d{2}\.\d{2}\.\d{4}))?/i);
@@ -114,39 +123,35 @@ function setTextAt(paragraph,index,value){const ts=textNodes(paragraph);if(ts[in
 function setAllText(paragraph,value){const ts=textNodes(paragraph);if(!ts.length)return;ts[0].textContent=value||"";for(let i=1;i<ts.length;i++)ts[i].textContent=""}
 function cellText(cell,value){setNodeText(cell,value)}
 function dateCell(cell,value){const ts=textNodes(cell);if(!ts.length)return;ts[0].textContent=value||"";for(let i=1;i<ts.length;i++)ts[i].textContent=""}
-function addLeftPageDate(doc,value){
-  const ps=Array.from(doc.getElementsByTagNameNS(NS,"p"));
-  // Страница 1 шаблона не содержит готового поля даты. Поэтому добавляем
-  // отдельную строку сразу под заголовком «Заявка», справа.
-  const title=ps.find(p=>{
-    const t=Array.from(p.getElementsByTagNameNS(NS,"t")).map(n=>n.textContent||"").join("");
-    return t.trim()==="Заявка";
-  });
-  if(!title || !title.parentNode) return false;
+function setParagraphMarker(paragraph,marker,value){
+  const ts=textNodes(paragraph);
+  if(!ts.length)return false;
+  const full=ts.map(n=>n.textContent||"").join("");
+  const pos=full.indexOf(marker);
+  if(pos<0)return false;
 
-  // Не добавляем повторно, если документ формируется повторно.
-  const next=title.nextElementSibling;
-  if(next){
-    const nt=Array.from(next.getElementsByTagNameNS(NS,"t")).map(n=>n.textContent||"").join("");
-    if(nt.includes("Дата:")) return true;
+  // Сохраняем маркер и его оформление, заменяем только пустое место после него.
+  let seen=false;
+  for(const t of ts){
+    const val=t.textContent||"";
+    if(!seen && val.includes(marker)){
+      seen=true;
+      const at=val.indexOf(marker)+marker.length;
+      t.textContent=val.slice(0,at);
+    }else if(seen){
+      t.textContent="";
+    }
   }
-
-  const p=doc.createElementNS(NS,"w:p");
-  const pPr=doc.createElementNS(NS,"w:pPr");
-  const jc=doc.createElementNS(NS,"w:jc");
-  jc.setAttributeNS(NS,"w:val","right");
-  pPr.appendChild(jc);
-  p.appendChild(pPr);
-
-  const r=doc.createElementNS(NS,"w:r");
-  const t=doc.createElementNS(NS,"w:t");
-  t.textContent="Дата: "+value;
-  r.appendChild(t);
-  p.appendChild(r);
-
-  title.parentNode.insertBefore(p,title.nextSibling);
+  ts[ts.length-1].textContent=(ts[ts.length-1].textContent||"")+" "+value;
   return true;
 }
+
+function setParagraphByText(doc,needle,value){
+  const ps=Array.from(doc.getElementsByTagNameNS(NS,"p"));
+  const p=ps.find(p=>Array.from(p.getElementsByTagNameNS(NS,"t")).map(n=>n.textContent||"").join("").includes(needle));
+  return p ? setParagraphMarker(p,needle,value) : false;
+}
+
 async function fillDoc(d){
   const r=await fetch("template.docx",{cache:"no-store"});
   if(!r.ok)throw Error("Не найден Word-шаблон.");
@@ -160,9 +165,10 @@ async function fillDoc(d){
   const paragraph=i=>ps[i]||null;
   const setP=(i,idx,val)=>{const p=paragraph(i);if(p)setTextAt(p,idx,val)};
 
-  // Заявка: индексы оставляем привязанными к реальному шаблону.
+  // Заявка: используем текстовые ориентиры из исправленного шаблона.
   setP(2,1,d.car);setP(2,4,d.plate);
-  setP(3,2,d.recipient);setP(4,1,d.driver);
+  setParagraphByText(doc,"Прибывшее за грузом в адрес получателя",d.recipient);
+  setParagraphByText(doc,"ФИО водителя/№ ВУ/паспортные данные",d.driver);
   setP(5,1,d.passportSeries);setP(5,4,d.passportNumber);
   setP(5,7,d.issuedBy);setP(5,9,d.passportDate);
   setP(6,3,d.phone);
@@ -186,7 +192,7 @@ async function fillDoc(d){
   }
 
   // Даты доверенности: ищем подписи в самом шаблоне, а не полагаемся на номера абзацев.
-  addLeftPageDate(doc,d.today);
+  setParagraphByText(doc,"Дата:",d.today);
 
   if(tables[1]){
     const rr=rows(tables[1]);
