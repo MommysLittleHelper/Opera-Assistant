@@ -58,12 +58,14 @@ function parse(t){
 
   // Получатель: в тексте может быть «в адрес: ... П/П ...».
   d.recipient=between(["в адрес:","адрес получателя"],["инвойс","дт"]);
-  if(!d.recipient){  const am=x.match(/в адрес\s*:\s*(.+?)(?=\s*\)\s*,?|\s*,?\s*инвойс\b|\s*,?\s*ДТ\b|$)/i);
-  if(am){
+  if(!d.recipient){
+    const am=x.match(/в адрес\s*:\s*(.+?)(?=\s*\)\s*,?|\s*,?\s*инвойс\b|\s*,?\s*ДТ\b|$)/i);
+    if(am){
     let recipient=clean(am[1]);
     recipient=recipient.replace(/^АО\s*["«]?ЛОГИСТИКА-ТЕРМИНАЛ["»]?\s*/i,"");
     recipient=recipient.replace(/^П\/П\s*/i,"");
-    d.recipient=clean(recipient);
+      d.recipient=clean(recipient);
+    }
   }
   d.recipient=d.recipient.replace(/\s*П\/П\s+.+$/i,"").replace(/^АО\s*[«"“]?ЛОГИСТИКА[-–—\s]+ТЕРМИНАЛ[»"”]?\s*/i,"").trim();
 
