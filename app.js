@@ -7,24 +7,52 @@ function dateList(t){return [...t.matchAll(/\b\d{2}\.\d{2}\.\d{4}\b/g)].map(m=>m
 function phone(t){const m=t.match(/(?:\+7|8)\s*\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/);return m?clean(m[0]):""}
 function passport(t){const m=t.match(/\b(\d{4})\s+(\d{6})\b/);return m?{series:m[1],number:m[2]}:{series:"",number:""}}
 function parse(t){
- const x=t.replace(/\r/g," ").replace(/\n/g," ").replace(/\s+/g," ").trim(), dates=dateList(x), pp=passport(x);
- const d={driver:"",car:"",plate:"",passportSeries:pp.series,passportNumber:pp.number,issuedBy:"",passportDate:"",phone:phone(x),recipient:"",dt:"",do:"",jdn:"",invoice:"",invoiceDate:"",ref:"",places:"",weight:""};
- // Сначала работаем по ЯВНЫМ подписям. Это основная логика версии 0.4.4.
- let m=x.match(/\bВодитель\s+([А-ЯЁ][а-яё-]+(?:\s+[А-ЯЁ][а-яё-]+){1,2})(?=\s*,|\s+ПАСПОРТ\b)/i); if(m)d.driver=clean(m[1]);
- m=x.match(/\bАВТОМОБИЛЬ\s+(.+?)(?=\s+ГОСНОМЕР\b)/i); if(m)d.car=clean(m[1]);
- m=x.match(/\bГОСНОМЕР\s+([A-ZА-ЯЁ]\d{3}[A-ZА-ЯЁ]{2}\d{2,3})\b/i); if(m)d.plate=m[1];
- m=x.match(/\bПАСПОРТ\s+(\d{4})\s+(\d{6})\b/i); if(m){d.passportSeries=m[1];d.passportNumber=m[2]}
- m=x.match(/\bвыдан\s+(.+?)(?=\s+ГАЗ\s+АВТОМОБИЛЬ\b)/i); if(m)d.issuedBy=clean(m[1]);
- m=x.match(/\bдата\s+выдачи\s+паспорта\s+(\d{2}\.\d{2}\.\d{4})/i); if(m)d.passportDate=m[1]; else if(dates.length)d.passportDate=dates[0];
- m=x.match(/\bв\s+адрес:\s*(.+?)(?=\))/i); if(m)d.recipient=clean(m[1]);
- m=x.match(/\bДО\s+(?:№\s*)?([0-9]+)/i); if(m)d.do=m[1];
- m=x.match(/\bДТ\s+(?:№\s*)?([0-9]+\/[0-9]+\/[0-9]+)/i); if(m)d.dt=m[1];
- m=x.match(/\bЖДН\s+(?:№\s*)?([0-9]+)\s+от\s+(\d{2}\.\d{2}\.\d{4})/i); if(m)d.jdn=`№${m[1]} от ${m[2]}`;
- m=x.match(/\bИНВОЙС\s+(?:№\s*)?([0-9A-ZА-ЯЁ/-]+)\s+от\s+(\d{2}\.\d{2}\.\d{4})/i); if(m){d.invoice=m[1];d.invoiceDate=m[2]}
- m=x.match(/\bREF\s+([^\s,;]+)/i); if(m)d.ref=clean(m[1]);
- m=x.match(/\b(?:количество\s+мест|мест)\s*[:№#-]?\s*([0-9]+)/i); if(m)d.places=m[1];
- m=x.match(/\bвес\s+брутто\s*[:№#-]?\s*([0-9]+(?:[,.][0-9]+)?)\s*(?:КГ|кг)?/i); if(m)d.weight=clean(m[1]);
- const now=new Date(),pad=n=>String(n).padStart(2,"0"),today=`${pad(now.getDate())}.${pad(now.getMonth()+1)}.${now.getFullYear()}`; const expiry=new Date(now); expiry.setFullYear(expiry.getFullYear()+1);expiry.setMonth(expiry.getMonth()+1);expiry.setDate(expiry.getDate()+1); d.today=today;d.expiry=`${pad(expiry.getDate())}.${pad(expiry.getMonth()+1)}.${expiry.getFullYear()}`; return d;
+  // Важный принцип: если пользователь написал название поля, ищем значение
+  // относительно этой метки. Никакого угадывания по позиции строки.
+  const x=String(t||'').replace(/\r/g,' ').replace(/\n/g,' ').replace(/\s+/g,' ').trim();
+  const d={driver:'',car:'',plate:'',passportSeries:'',passportNumber:'',issuedBy:'',passportDate:'',phone:'',recipient:'',dt:'',do:'',jdn:'',invoice:'',invoiceDate:'',ref:'',places:'',weight:''};
+  const get=(label,nextLabels)=>{
+    const low=x.toLocaleLowerCase('ru-RU'), lab=label.toLocaleLowerCase('ru-RU');
+    const i=low.indexOf(lab); if(i<0)return '';
+    let start=i+label.length;
+    while(/[\s:№#.,-]/.test(x[start]||''))start++;
+    let end=x.length;
+    for(const n of nextLabels){const j=low.indexOf(n.toLocaleLowerCase('ru-RU'),start);if(j>=0&&j<end)end=j}
+    return x.slice(start,end).trim().replace(/[;,]+$/,'').trim();
+  };
+  const stopDriver=['паспорт'];
+  d.driver=get('Водитель',stopDriver).replace(/,$/,'');
+  d.car=get('АВТОМОБИЛЬ',['Госномер','Гос.номер','ГОСНОМЕР','Телефон']).replace(/^ГАЗ\s+/i,'').trim();
+  d.plate=get('Госномер',['Телефон','ДО','ЖДН','ИНВОЙС','ДТ']);
+  d.passportSeries=get('ПАСПОРТ',['дата выдачи паспорта','выдан']).split(/\s+/)[0]||'';
+  const passRest=get('ПАСПОРТ',['дата выдачи паспорта','выдан']).split(/\s+/);
+  if(passRest.length>1 && /^\d{6}$/.test(passRest[1])) d.passportNumber=passRest[1];
+  d.passportDate=get('дата выдачи паспорта',['выдан','ГАЗ АВТОМОБИЛЬ','АВТОМОБИЛЬ']);
+  d.issuedBy=get('выдан',['ГАЗ АВТОМОБИЛЬ','АВТОМОБИЛЬ','Госномер','Телефон','ДО','ЖДН','ИНВОЙС','ДТ']);
+  d.phone=get('ТЕЛЕФОН',['ДО','ЖДН','ИНВОЙС','ДТ']);
+  d.do=get('ДО',['ЖДН','ИНВОЙС','ДТ']);
+  d.jdn=get('ЖДН',['ИНВОЙС','ДТ']);
+  const addr=get('в адрес:',['П/П','ИНВОЙС','ДТ']);
+  // Входной текст может содержать «в адрес: получатель П/П ...» — это единый блок.
+  d.recipient=addr.replace(/\s*П\/П\s*$/i,'').trim();
+  d.invoice=get('ИНВОЙС',['ДТ']);
+  d.dt=get('ДТ',[]);
+  // Разбираем номера и даты внутри полей, сохраняя исходные значения чистыми.
+  let m=d.passportSeries.match(/^(\d{4})\s+(\d{6})$/); if(m){d.passportSeries=m[1];d.passportNumber=m[2]}
+  if(!d.passportNumber){m=x.match(/ПАСПОРТ\s+(\d{4})\s+(\d{6})/i);if(m){d.passportSeries=m[1];d.passportNumber=m[2]}}
+  m=d.jdn.match(/№?\s*(\d+)\s+от\s+(\d{2}\.\d{2}\.\d{4})/i);if(m)d.jdn=`№${m[1]} от ${m[2]}`;
+  else {m=d.jdn.match(/\d+/);if(m)d.jdn=m[0]}
+  m=d.invoice.match(/№?\s*([0-9A-ZА-ЯЁ/-]+)\s+от\s+(\d{2}\.\d{2}\.\d{4})/i);if(m){d.invoice=m[1];d.invoiceDate=m[2]} else {m=d.invoice.match(/([0-9A-ZА-ЯЁ/-]+)/i);if(m)d.invoice=m[1]}
+  m=d.dt.match(/\d{5,}\/\d{5,}\/\d{5,}/);if(m)d.dt=m[0];
+  d.plate=d.plate.replace(/[^0-9A-ZА-ЯЁ]/gi,'');
+  d.phone=d.phone.replace(/(?=\s)/g,'').trim();
+  d.ref=get('REF',['Количество мест','Вес брутто']);
+  d.places=get('Количество мест',['Вес брутто','REF']);
+  d.weight=get('Вес брутто',['REF']);
+  const now=new Date(),pad=n=>String(n).padStart(2,'0'),today=`${pad(now.getDate())}.${pad(now.getMonth()+1)}.${now.getFullYear()}`;
+  const expiry=new Date(now);expiry.setFullYear(expiry.getFullYear()+1);expiry.setMonth(expiry.getMonth()+1);expiry.setDate(expiry.getDate()+1);
+  d.today=today;d.expiry=`${pad(expiry.getDate())}.${pad(expiry.getMonth()+1)}.${expiry.getFullYear()}`;
+  return d;
 }
 function render(d){const panel=document.getElementById("parsedFields"),grid=document.getElementById("fieldsGrid");panel.hidden=false;grid.innerHTML=fields.map(([k,l])=>`<div class="field"><label>${l}</label><input data-key="${k}" value="${String(d[k]||"").replace(/"/g,"&quot;")}" class="${d[k]?"":"missing"}">${d[k]?"":"<small>не найдено — можно оставить пустым</small>"}</div>`).join("");grid.querySelectorAll("input").forEach(e=>e.oninput=()=>e.classList.toggle("missing",!e.value.trim()));stats.textContent="Данные распознаны — проверьте поля";generate.textContent="Сформировать документ"}
 function values(){const d={};document.querySelectorAll("#fieldsGrid input").forEach(e=>d[e.dataset.key]=e.value.trim());return d}
