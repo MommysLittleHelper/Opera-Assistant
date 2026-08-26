@@ -8,110 +8,11 @@ function dateList(t){return [...String(t||"").matchAll(/\b\d{2}\.\d{2}\.\d{4}\b/
 function phone(t){const m=String(t||"").match(/(?:\+7|8)\s*\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/);return m?clean(m[0]):""}
 const n=v=>String(v??"").replace(/\uFEFF/g,"").replace(/\u00a0/g," ").trim().toLowerCase().replace(/\s+/g," ");
 const parseTable=t=>t.replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n").map(x=>x.split("\t").map(y=>y.trim())).filter(r=>r.some(x=>x!==""));
-const aliases={
-  "номер ктк":["номер ктк","ктк"],
-  "номер заказа легенда":["номер заказа легенда","букинг","номер заказа","легенда","booking"],
-  "статус":["статус","клиент","получатель"],
-  "закрытие":["закрытие"],
-  "забор":["забор"],
-  "бесплатные дни":["бесплатные дни","беспл. дни"],
-  "всего дней":["всего дней"],
-  "платные":["платные"],
-  "хранение":["хранение"],
-  "есть доп расходы?":["есть доп расходы?","есть доп расходы","доп расходы"],
-  "ref":["ref","реф"],
-  "фактический объем, м3":["фактический объем, м3","фактический объем м3","объем м3","объем, м3"],
-  "объем при условии 1 м3 не более 500кг*":["объем при условии 1 м3 не более 500кг*","объем при условии 1 м3 не более 500кг","объем при условии"],
-  "вес, кг":["вес, кг","вес кг","вес"],
-  "вес по акту":["вес по акту","вес по акту, кг"],
-  "кол-во мест":["кол-во мест","количество мест","мест"]
-};
-function col(headers,key,dict=aliases){
-  const hs=headers.map(n), opts=(dict[key]||[key]).map(n);
-  let i=hs.findIndex(x=>opts.includes(x));
-  if(i>=0)return i;
-  return hs.findIndex(x=>x&&opts.some(y=>x.includes(y)||y.includes(x)));
-}
-function total(r){
-  const s=r.map(n).filter(Boolean).join(" ");
-  return !s||/итого|всего|total/i.test(s);
-}
-const Proработка={
-  update(){
-    const r=parseTable(input.value);
-    if(!r.length){stats.textContent="Данные не введены";generate.disabled=true;return}
-    const required=["номер ктк"];
-    const miss=required.filter(k=>col(r[0],k)<0);
-    const data=r.slice(1).filter(x=>!total(x));
-    stats.textContent=miss.length
-      ? `Не найдена колонка: ${miss.join(", ")}`
-      : `${data.length} записей · ${r[0].length} столбцов`;
-    generate.disabled=!!miss.length||!data.length;
-  },
-  async build(){
-    const r=parseTable(input.value);
-    if(!r.length) throw Error("Данные не введены");
-    const headers=r[0];
-    const keys=Object.keys(aliases);
-    const src={};
-    keys.forEach(k=>src[k]=col(headers,k));
-    if(src["номер ктк"]<0) throw Error("Не найдена колонка «номер ктк»");
-    const data=r.slice(1).filter(x=>!total(x));
+const aliases={"номер ктк":["номер ктк","ктк"],ref:["ref","реф","букинг"],статус:["статус","клиент"],"фактический объем, м3":["фактический объем, м3","фактический объем м3","объем м3","объем, м3"],"вес, кг":["вес, кг","вес кг","вес"],"кол-во мест":["кол-во мест","количество мест","мест"]};
+function col(headers,key,dict=aliases){let h=headers.map(n),o=(dict[key]||[key]).map(n),i=h.findIndex(x=>o.includes(x));return i>=0?i:h.findIndex(x=>x&&o.some(y=>x.includes(y)||y.includes(x)))}
+function total(r){let s=r.map(n).filter(Boolean).join(" ");return !s||/итого|всего|total/i.test(s)||(!n(r[0])&&!n(r[10]))}
 
-    const res=await fetch("проработка.xlsx",{cache:"no-store"});
-    if(!res.ok)throw Error("Не найден шаблон «проработка.xlsx».");
-    const wb=XLSX.read(new Uint8Array(await res.arrayBuffer()),{type:"array",cellStyles:true});
-    const sh=wb.Sheets[wb.SheetNames[0]];
-    const rg=XLSX.utils.decode_range(sh["!ref"]);
-    const targetHeaders=[];
-    for(let c=rg.s.c;c<=rg.e.c;c++)
-      targetHeaders.push(sh[XLSX.utils.encode_cell({r:rg.s.r,c})]?.v??"");
-
-    const targetAliases={
-      "номер ктк":["номер ктк","ктк"],
-      "номер заказа легенда":["букинг","номер заказа легенда","номер заказа","легенда"],
-      "статус":["клиент","статус"],
-      "закрытие":["закрытие"],
-      "забор":["забор"],
-      "бесплатные дни":["бесплатные дни","беспл. дни"],
-      "всего дней":["всего дней"],
-      "платные":["платные"],
-      "хранение":["хранение"],
-      "есть доп расходы?":["есть доп расходы?","есть доп расходы","доп расходы"],
-      "ref":["букинг","ref","реф"],
-      "фактический объем, м3":["объем, м3","объем м3","фактический объем, м3"],
-      "объем при условии 1 м3 не более 500кг*":["объем при условии 1 м3 не более 500кг*","объем при условии"],
-      "вес, кг":["вес, кг","вес кг","вес"],
-      "вес по акту":["вес по акту","вес по акту, кг"],
-      "кол-во мест":["кол-во мест","количество мест","мест"]
-    };
-    const dst={};
-    Object.keys(targetAliases).forEach(k=>dst[k]=col(targetHeaders,k,targetAliases));
-
-    // Копируем ВСЕ совпавшие колонки, а не только шесть обязательных.
-    data.forEach((row,i)=>{
-      Object.keys(dst).forEach(k=>{
-        const sc=src[k], dc=dst[k];
-        if(sc<0||dc<0)return;
-        const v=String(row[sc]??"").trim();
-        const a=XLSX.utils.encode_cell({r:rg.s.r+1+i,c:dc});
-        const normalized=v.replace(/\s/g,"").replace(",",".");
-        sh[a]=/^-?\d+(?:\.\d+)?$/.test(normalized)
-          ? {t:"n",v:Number(normalized)}
-          : {t:"s",v};
-      });
-    });
-
-    const out=XLSX.write(wb,{bookType:"xlsx",type:"array",cellStyles:true});
-    const ktk=String(data[0]?.[src["номер ктк"]]||"готово")
-      .replace(/\//g,"").replace(/[\\:*?"<>|]/g,"");
-    return {
-      blob:new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),
-      filename:`Проработка_${ktk||"готово"}.xlsx`,
-      text:`Сформировано записей: ${data.length}; перенесены все найденные колонки`
-    };
-  }
-};est=-1,bestLen=0;
+const Proработка={update(){let r=parseTable(input.value);if(!r.length){stats.textContent="Данные не введены";generate.disabled=true;return}let req=["номер ктк","ref","статус","фактический объем, м3","вес, кг","кол-во мест"],miss=req.filter(k=>col(r[0],k)<0),data=r.slice(1).filter(x=>!total(x));stats.textContent=miss.length?`${data.length} строк · не найдены: ${miss.join(", ")}`:`${data.length} записей · ${r[0].length} столбцов · все необходимые поля найдены`;generate.disabled=!!miss.length||!data.length},async build(){let r=parseTable(input.value),req=["номер ктк","ref","статус","фактический объем, м3","вес, кг","кол-во мест"],src={};req.forEach(k=>src[k]=col(r[0],k));if(Object.values(src).some(x=>x<0))throw Error("Не найдены необходимые поля");let data=r.slice(1).filter(x=>!total(x)),res=await fetch("проработка.xlsx",{cache:"no-store"});if(!res.ok)throw Error("Не найден шаблон «проработка.xlsx».");let wb=XLSX.read(new Uint8Array(await res.arrayBuffer()),{type:"array",cellStyles:true}),sh=wb.Sheets[wb.SheetNames[0]],rg=XLSX.utils.decode_range(sh["!ref"]),heads=[];for(let c=rg.s.c;c<=rg.e.c;c++)heads.push(sh[XLSX.utils.encode_cell({r:rg.s.r,c})]?.v??"");let targetAliases={"номер ктк":["номер ктк","ктк"],ref:["букинг","ref","реф"],статус:["клиент","статус"],"фактический объем, м3":["объем, м3","объем м3","фактический объем, м3"],"вес, кг":["вес, кг","вес кг","вес"],"кол-во мест":["кол-во мест","количество мест","мест"]},dst={};Object.keys(targetAliases).forEach(k=>dst[k]=col(heads,k,targetAliases));if(Object.values(dst).some(x=>x<0))throw Error("В шаблоне не найдена необходимая колонка");data.forEach((row,i)=>{req.forEach(k=>{let v=String(row[src[k]]??"").trim(),a=XLSX.utils.encode_cell({r:rg.s.r+1+i,c:dst[k]});sh[a]=/^-?\d+(?:[.,]\d+)?$/.test(v.replace(/\s/g,""))?{t:"n",v:Number(v.replace(/\s/g,"").replace(",","."))}:{t:"s",v}})});let out=XLSX.write(wb,{bookType:"xlsx",type:"array",cellStyles:true}),ktk=String(data[0]?.[src["номер ктк"]]||"готово").replace(/\//g,"").replace(/[\\:*?"<>|]/g,"");return{blob:new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),filename:`Проработка_${ktk||"готово"}.xlsx`,text:`Сформировано записей: ${data.length}`}}};est=-1,bestLen=0;
     for(const label of labels){
       const i=low.indexOf(label.toLocaleLowerCase("ru-RU"));
       if(i>=0 && (best<0 || i<best)){best=i;bestLen=label.length;}
