@@ -1,15 +1,57 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Помощник Опера</title><link rel="stylesheet" href="style.css"></head>
-<body><main>
-<header><div class="eyebrow">РАБОЧИЙ ИНСТРУМЕНТ</div><h1>Помощник Опера</h1><p>Создание операционных документов.</p></header>
-<section class="card"><span class="num">01</span><h2>Данные</h2><p id="inputHelp">В Excel выделите таблицу → Ctrl+C → вставьте ниже.</p>
-<textarea id="input" spellcheck="false" placeholder="Вставьте сюда диапазон из Excel (Ctrl+V)"></textarea>
-<div class="meta"><span id="stats">Данные не введены</span><button id="clear" class="secondary" type="button">Очистить</button></div></section>
-<section class="card"><span class="num">02</span><h2>Документ</h2><select id="document"><option value="proработка">Проработка</option><option value="заявка">Заявка + Доверенность</option></select></section>
-<section class="card"><span class="num">03</span><h2>Формат</h2><div class="format">Excel (.xlsx)</div></section>
-<button id="generate" disabled>Сформировать документ</button><div id="status"></div>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Помощник Опера</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+<header>
+<div class="eyebrow">РАБОЧИЙ ИНСТРУМЕНТ</div>
+<h1>Помощник Опера</h1>
+<p>Создание операционных документов.</p>
+</header>
+
+<section class="card">
+<span class="num">01</span>
+<h2>Данные</h2>
+<p id="inputHelp">Вставьте диапазон из Excel или текст для документа.</p>
+<textarea id="input" spellcheck="false" placeholder="Вставьте сюда данные…"></textarea>
+<div class="meta">
+<span id="stats">Данные не введены</span>
+<button id="clear" class="secondary" type="button">Очистить</button>
+</div>
+
+<div id="parsedFields" class="parsed-fields" hidden>
+<h3>Распознанные данные</h3>
+<p class="hint">Проверьте значения. Любое поле можно исправить вручную.</p>
+<div id="fieldsGrid"></div>
+</div>
+</section>
+
+<section class="card">
+<span class="num">02</span>
+<h2>Документ</h2>
+<select id="document">
+<option value="proработка">Проработка</option>
+<option value="заявка">Заявка + Доверенность</option>
+</select>
+</section>
+
+<section class="card">
+<span class="num">03</span>
+<h2>Формат</h2>
+<div class="format">Excel (.xlsx)</div>
+</section>
+
+<button id="generate" disabled>Сформировать документ</button>
+<div id="status"></div>
 <footer>Данные обрабатываются непосредственно в браузере.</footer>
 </main>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><script src="app.js"></script>
-</body></html>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
