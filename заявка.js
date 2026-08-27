@@ -14,117 +14,120 @@ const Заявка = (() => {
 
   const Proработка={update(){let r=parseTable(input.value);if(!r.length){stats.textContent="Данные не введены";generate.disabled=true;return}let req=["номер ктк","ref","статус","фактический объем, м3","вес, кг","кол-во мест"],miss=req.filter(k=>col(r[0],k)<0),data=r.slice(1).filter(x=>!total(x));stats.textContent=miss.length?`${data.length} строк · не найдены: ${miss.join(", ")}`:`${data.length} записей · ${r[0].length} столбцов · все необходимые поля найдены`;generate.disabled=!!miss.length||!data.length},async build(){let r=parseTable(input.value),req=["номер ктк","ref","статус","фактический объем, м3","вес, кг","кол-во мест"],src={};req.forEach(k=>src[k]=col(r[0],k));if(Object.values(src).some(x=>x<0))throw Error("Не найдены необходимые поля");let data=r.slice(1).filter(x=>!total(x)),res=await fetch("проработка.xlsx",{cache:"no-store"});if(!res.ok)throw Error("Не найден шаблон «проработка.xlsx».");let wb=XLSX.read(new Uint8Array(await res.arrayBuffer()),{type:"array",cellStyles:true}),sh=wb.Sheets[wb.SheetNames[0]],rg=XLSX.utils.decode_range(sh["!ref"]),heads=[];for(let c=rg.s.c;c<=rg.e.c;c++)heads.push(sh[XLSX.utils.encode_cell({r:rg.s.r,c})]?.v??"");let dst={};req.forEach(k=>dst[k]=col(heads,k));if(Object.values(dst).some(x=>x<0))throw Error("В шаблоне не найдена необходимая колонка");data.forEach((row,i)=>req.forEach(k=>{let v=String(row[src[k]]??"").trim(),a=XLSX.utils.encode_cell({r:rg.s.r+1+i,c:dst[k]});sh[a]=/^-?\d+(?:[.,]\d+)?$/.test(v.replace(/\s/g,""))?{t:"n",v:Number(v.replace(/\s/g,"").replace(",","."))}:{t:"s",v}}));let out=XLSX.write(wb,{bookType:"xlsx",type:"array",cellStyles:true}),ktk=String(data[0]?.[src["номер ктк"]]||"готово").replace(/\//g,"").replace(/[\\:*?"<>|]/g,"");return{blob:new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),filename:`Проработка_${ktk||"готово"}.xlsx`,text:`Сформировано записей: ${data.length}`}}};
   function parse(t){
-    const x=normalizeText(t);
-    const low=x.toLocaleLowerCase("ru-RU");
-    const d={driver:"",car:"",plate:"",passportSeries:"",passportNumber:"",issuedBy:"",passportDate:"",phone:"",recipient:"",dt:"",do:"",jdn:"",invoice:"",invoiceDate:"",ref:"",places:"",weight:""};
+    const raw=String(t||"").replace(/\r/g,"");
+    const lines=raw.split("\n").map(x=>x.trim()).filter(Boolean);
+    const all=lines.join(" ").replace(/\s+/g," ").trim();
+    const d={};
 
-    // Значение после явной метки до следующей известной метки.
-    const between=(labels,next=[])=>{
-      let best=-1,bestLen=0;
-      for(const label of labels){
-        const i=low.indexOf(label.toLocaleLowerCase("ru-RU"));
-        if(i>=0 && (best<0 || i<best)){best=i;bestLen=label.length;}
-      }
-      if(best<0)return "";
-      let s=best+bestLen;
-      while(/[ \t:№#.,-]/.test(x[s]||""))s++;
-      let e=x.length;
-      for(const n of next){
-        const j=low.indexOf(n.toLocaleLowerCase("ru-RU"),s);
-        if(j>=0 && j<e)e=j;
-      }
-      return clean(x.slice(s,e).replace(/[;,]+$/,""));
-    };
+    // Helpers
+    const clean=v=>String(v||"").replace(/\s+/g," ").replace(/^[,;:\s]+|[,;:\s]+$/g,"").trim();
+    const set=(k,v)=>{v=clean(v);if(v&&!d[k])d[k]=v};
 
-    // Основные поля — сначала по явным меткам.
-    d.driver=between(["водитель","фио водителя"],["паспорт"]).replace(/[;,]+$/g,"").trim();
-    d.car=between(["автомобиль"],["госномер","г.н.з.","телефон","тел."]).replace(/^газ\s+/i,"").trim();
-    d.plate=between(["госномер","г.н.з."],["телефон","тел.","до","ждн","cmr","инвойс","дт"]);
-    d.plate=d.plate.match(/[А-ЯЁA-Z]\s*\d{3}\s*[А-ЯЁA-Z]{2}\s*\d{2,3}/i)?.[0]?.replace(/\s+/g,"")||d.plate.replace(/[^\dA-ZА-ЯЁ]/gi,"");
+    // 1) Phone — independent of labels.
+    const phone=all.match(/(?:\+7|8)\s*[\(\s-]?\d{3}[\)\s-]?\s*\d{3}\s*[-\s]?\d{2}\s*[-\s]?\d{2}/);
+    if(phone) set("phone",phone[0]);
 
-    const pass=between(["паспорт"],["дата выдачи паспорта","выдан","автомобиль","газ автомобиль","госномер","телефон"]);
-    let m=pass.match(/\b(\d{4})\s+(?:№\s*)?(\d{6})\b/);
-    if(m){d.passportSeries=m[1];d.passportNumber=m[2]}
-    else {
-      m=x.match(/\bПАСПОРТ\s*:?\s*(\d{4})\s+(?:№\s*)?(\d{6})\b/i);
-      if(m){d.passportSeries=m[1];d.passportNumber=m[2]}
-    }
-    d.passportDate=between(["дата выдачи паспорта"],["выдан","автомобиль","газ автомобиль","госномер","телефон","тел."]).replace(/[;,]+$/g,"").trim();
-    if(!d.passportDate){m=x.match(/дата выдачи паспорта\s*[:№#-]?\s*(\d{2}\.\d{2}\.\d{4})/i);if(m)d.passportDate=m[1]}
-
-    d.issuedBy=between(["выдан"],["дата выдачи паспорта","газ автомобиль","автомобиль","госномер","телефон","тел.","до","ждн","cmr","инвойс","дт"]).replace(/[;,]+$/g,"").trim();
-    d.phone=phone(x);
-
-    d.do=between(["до"],["ждн","cmr","инвойс","дт"]);
-    m=x.match(/(?:^|\s)ДО\s*(?:№\s*)?([0-9]{4,})\b/i);if(m)d.do=m[1];
-
-    d.jdn=between(["ждн","cmr(ждн)","cmr"],["инвойс","дт"]);
-    m=x.match(/(?:ЖДН|CMR(?:\(ЖДН\))?)\s*(?:№\s*)*([0-9]+)\s+от\s+(\d{2}\.\d{2}\.\d{4})/i);
-    if(m)d.jdn=`№${m[1]} от ${m[2]}`;
-    else {m=x.match(/(?:ЖДН|CMR(?:\(ЖДН\))?)\s*(?:№\s*)*([0-9]+)/i);if(m)d.jdn=`№${m[1]}`}
-
-    // Получатель:
-    // Если есть «П/П», это самый надёжный ориентир: после него идёт
-    // именно получатель. Берём его до закрывающей скобки/запятой/ИНВОЙСА.
-    let recipient="";
-    let rm=x.match(/П\/П\s+(.+?)(?=\)|\s+(?:ИНВОЙС\b|ДТ\b|ДО\b|ЖДН\b|CMR\b)|$)/i);
-    if(rm) {
-      recipient=clean(rm[1]).replace(/[\s),.;:]+$/g,"").trim();
+    // 2) Passport: 4 digits + 6 digits. Also accept compact 10 digits.
+    //    Date immediately following the passport is treated as issue date.
+    const pass=/\b(\d{4})\s*(\d{6})\b/.exec(all);
+    if(pass){
+      set("passportSeries",pass[1]);
+      set("passportNumber",pass[2]);
+      const after=all.slice(pass.index+pass[0].length);
+      const pd=after.match(/\b(\d{2}\.\d{2}\.\d{4})\b/);
+      if(pd)set("passportDate",pd[1]);
     }
 
-    // Запасной вариант — если П/П отсутствует, разбираем «в адрес: ...».
-    if(!recipient){
-      rm=x.match(/(?:в\s+адрес\s*:\s*|в\s+адрес\s+получателя\s+)(.+?)(?=\s*(?:\)|,)?\s*(?:ИНВОЙС\b|ДТ\b|ДО\b|ЖДН\b|CMR\b)|$)/i);
-      if(rm){
-        recipient=clean(rm[1])
-          .replace(/^АО\s*[«"“]?ЛОГИСТИКА[-–—\s]+ТЕРМИНАЛ[»"”]?\s*/i,"")
-          .replace(/^П\/П\s*/i,"")
-          .replace(/[\s),.;:]+$/g,"")
-          .trim();
+    // 3) Russian vehicle registration plate. Support Cyrillic letters
+    //    visually used in Russian plates and 3-digit region.
+    const plate=/\b([АВЕКМНОРСТУХABEKMHOPCTYX])\s?\d{3}\s?([АВЕКМНОРСТУХABEKMHOPCTYX]{2})\s?\d{2,3}\b/i.exec(all);
+    if(plate){
+      const normalized=plate[0].replace(/\s+/g,"").toUpperCase();
+      set("plate",normalized);
+    }
+
+    // 4) FIO without the word "водитель".
+    //    Prefer a 3-word Cyrillic sequence; fall back to 2 words.
+    //    Exclude obvious organization/technical words.
+    const bad=new Set(["ТП","ОТДЕЛА","РОССИИ","САНКТ","ПЕТЕРБУРГУ","ЛО","ГАЗ","GAZ","NEXT","ВОДИТЕЛЬ","ПАСПОРТ"]);
+    const fio3=/\b([А-ЯЁ][а-яё-]+)\s+([А-ЯЁ][а-яё-]+)\s+([А-ЯЁ][а-яё-]+)\b/.exec(all);
+    if(fio3 && !bad.has(fio3[1].toUpperCase()) && !bad.has(fio3[2].toUpperCase()) && !bad.has(fio3[3].toUpperCase())){
+      set("driver",fio3[0]);
+    }else{
+      const fio2=/\b([А-ЯЁ][а-яё-]+)\s+([А-ЯЁ][а-яё-]+)\b/.exec(all);
+      if(fio2 && !bad.has(fio2[1].toUpperCase()) && !bad.has(fio2[2].toUpperCase()))
+        set("driver",fio2[0]);
+    }
+
+    // 5) Passport issuer: text after passport date and before vehicle/plate.
+    if(d.passportDate){
+      const di=all.indexOf(d.passportDate);
+      if(di>=0){
+        const after=all.slice(di+d.passportDate.length);
+        const stopCandidates=[
+          d.plate ? after.toUpperCase().indexOf(d.plate.toUpperCase()) : -1,
+          after.search(/\b(?:ГАЗ|КАМАЗ|МАЗ|MAN|VOLVO|SCANIA|DAF|IVECO|MERCEDES|RENAULT|FORD|FAW|HOWO|SHACMAN)\b/i)
+        ].filter(x=>x>=0);
+        const stop=stopCandidates.length?Math.min(...stopCandidates):after.length;
+        set("passportIssuedBy",after.slice(0,stop));
       }
     }
 
-    // Если в результате осталась служебная часть перед ООО/ИП, отбрасываем её.
-    recipient=recipient
-      .replace(/^АО\s*[«"“]?ЛОГИСТИКА[-–—\s]+ТЕРМИНАЛ[»"”]?\s*/i,"")
-      .replace(/^П\/П\s*/i,"")
-      .replace(/[\s),.;:]+$/g,"")
-      .trim();
+    // 6) Vehicle model: text around the plate, preferably after a known
+    //    manufacturer/vehicle marker, but do not require the marker.
+    if(d.plate){
+      const pi=all.toUpperCase().indexOf(d.plate.toUpperCase());
+      if(pi>=0){
+        let before=all.slice(0,pi).trim();
+        const marker=before.match(/(?:ГАЗ|GAZ|КАМАЗ|МАЗ|MAN|VOLVO|SCANIA|DAF|IVECO|MERCEDES|RENAULT|FORD|FAW|HOWO|SHACMAN)\b/i);
+        if(marker){
+          const candidate=before.slice(marker.index).trim();
+          set("vehicle",candidate);
+        }else if(d.passportDate){
+          const afterDate=all.slice(all.indexOf(d.passportDate)+d.passportDate.length,pi).trim();
+          set("vehicle",afterDate);
+        }
+      }
+    }
 
-    d.recipient=recipient;
+    // 7) Fixed transport block — parse structurally, without requiring
+    //    the user to add labels.
+    const jdn=all.match(/\bЖДН\s*№?\s*([0-9]+)\s*от\s*(\d{2}\.\d{2}\.\d{4})(?:\s*\(в\s*адрес:\s*(.*?)\))?/i);
+    if(jdn){
+      set("jdn",jdn[1]);
+      set("jdnDate",jdn[2]);
+      if(jdn[3]){
+        let recipient=clean(jdn[3]);
+        recipient=recipient.replace(/\s+П\/П\s+/ig," ").replace(/\bАО\s*["«].*?["»]\s*/ig,"").trim();
+        recipient=recipient.replace(/^.*?\bООО\b/i,"ООО").replace(/\s+/g," ");
+        set("recipient",recipient);
+      }
+    }
 
-    d.invoice=between(["инвойс"],["дт"]);
-    m=x.match(/ИНВОЙС\s*(?:№\s*)?([0-9A-ZА-ЯЁ/-]+)(?:\s+от\s+(\d{2}\.\d{2}\.\d{4}))?/i);
-    if(m){d.invoice=m[1];d.invoiceDate=m[2]||""}
+    const inv=all.match(/\bИНВОЙС\s*№?\s*([A-ZА-Я0-9-]+)\s*от\s*(\d{2}\.\d{2}\.\d{4})/i);
+    if(inv){set("invoice",inv[1]);set("invoiceDate",inv[2]);}
 
-    m=x.match(/(?:^|\s)ДТ\s*(?:№\s*)?([0-9]{5,}\/[0-9]{5,}\/[0-9]{5,})/i);if(m)d.dt=m[1];
-    d.ref=between(["ref"],["количество мест","кол-во мест","место","вес"]);
-    m=x.match(/\bREF\s+([^\s,;]+)/i);if(m)d.ref=m[1];
+    const dt=all.match(/\bДТ\s*([0-9\/]+)/i);
+    if(dt)set("dt",dt[1]);
 
-    // Места: распознаём и «Количество мест 1», и «Кол-во мест 1», и «1 место».
-    m=x.match(/(?:^|\s)(\d+)\s+мест(?:о|а)?(?=\s|$)/i);
-    if(m)d.places=m[1];
-    if(!d.places){m=x.match(/(?:количество\s+мест|кол-?во\s+мест)\s*[:№#-]?\s*(\d+(?:[.,]\d+)?)(?=\s|$)/i);if(m)d.places=m[1]}
-    if(!d.places){m=x.match(/(?:^|\s)мест(?:о|а)?\s*[:№#-]?\s*(\d+)(?=\s|$)/i);if(m)d.places=m[1]}
-    d.places=d.places.replace(",",".").match(/\d+(?:\.\d+)?/)?.[0]||"";
+    // 8) Manual-format values are also recognized when pasted, but manual
+    //    fields in the UI override them.
+    const weight=all.match(/\b(\d+(?:[.,]\d+)?)\s*кг\b/i);
+    if(weight)set("weight",weight[1].replace(",",".")+" кг");
 
-    // Вес: «214 кг», «вес брутто 214 кг КГ», «Вес 214 кг».
-    m=x.match(/(?:вес\s*(?:брутто|нетто)?\s*[:№#-]?\s*)(\d+(?:[.,]\d+)?)\s*(?:кг|килограмм(?:а|ов)?)?/i);
-    if(m)d.weight=`${m[1].replace(",",".")} кг`;
-    if(!d.weight){m=x.match(/(?:^|\s)(\d+(?:[.,]\d+)?)\s*(?:кг|килограмм(?:а|ов)?)(?=\s|$)/i);if(m)d.weight=`${m[1].replace(",",".")} кг`}
+    const places=all.match(/\b(?:кол-?во\s+мест|количество\s+мест|мест(?:о|а)?)\s*[:№]?\s*(\d+)\b/i)
+      || all.match(/\b(\d+)\s+мест(?:о|а)?\b/i);
+    if(places)set("places",places[1]);
 
-    const now=new Date();
-    const pad=n=>String(n).padStart(2,"0");
-    const today=`${pad(now.getDate())}.${pad(now.getMonth()+1)}.${now.getFullYear()}`;
-    // По правилу пользователя: сегодня + 1 год + 1 месяц + 1 день.
-    const expiry=new Date(now.getTime());
-    expiry.setFullYear(expiry.getFullYear()+1);
-    expiry.setMonth(expiry.getMonth()+1);
-    expiry.setDate(expiry.getDate()+1);
-    d.today=today;
-    d.expiry=`${pad(expiry.getDate())}.${pad(expiry.getMonth()+1)}.${expiry.getFullYear()}`;
+    const doNum=all.match(/\bДО\s*№?\s*([0-9]+)\b/i);
+    if(doNum)set("do",doNum[1]);
+
+    const ref=all.match(/\bREF\s*[:№]?\s*([A-Z0-9-]+)\b/i);
+    if(ref)set("ref",ref[1]);
+
     return d;
   }
+
   function render(d){const panel=document.getElementById("parsedFields"),grid=document.getElementById("fieldsGrid");panel.hidden=false;grid.innerHTML=fields.map(([k,l])=>`<div class="field"><label>${l}</label><input data-key="${k}" value="${String(d[k]||"").replace(/"/g,"&quot;")}" class="${d[k]?"":"missing"}">${d[k]?"":"<small>не найдено — можно оставить пустым</small>"}</div>`).join("");grid.querySelectorAll("input").forEach(e=>e.oninput=()=>e.classList.toggle("missing",!e.value.trim()));if(refreshParsed)refreshParsed.disabled=false;stats.textContent="Данные распознаны — проверьте поля";generate.textContent="Сформировать документ"}
   function values(){const d={};document.querySelectorAll("#fieldsGrid input").forEach(e=>d[e.dataset.key]=e.value.trim());const parsed=parse(input.value);d.today=parsed.today;d.expiry=parsed.expiry;return d}
   function textNodes(root){return Array.from(root.getElementsByTagNameNS(NS,"t"))}
