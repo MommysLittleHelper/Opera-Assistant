@@ -1,18 +1,6 @@
 
-// v0.5 ORDER OF ACTIONS
-(function(){
-  const documentEl=document.getElementById("document");
-  const dataCard=document.getElementById("dataCard");
-  if(!documentEl||!dataCard)return;
-  function sync(){
-    dataCard.classList.toggle("data-card-hidden", !String(documentEl.value||"").trim());
-  }
-  sync();
-  documentEl.addEventListener("change",sync);
-})();
-
-const input=document.getElementById("input"),refreshParsed=document.getElementById("refreshParsed"),stats=document.getElementById("stats"),clear=document.getElementById("clear"),generate=document.getElementById("generate"),status=document.getElementById("status"),tool=document.getElementById("document"),format=document.getElementById("format"),help=document.getElementById("inputHelp");
-let mode="заявка",blobUrl=null;
+const input=document.getElementById("input"),refreshParsed=document.getElementById("refreshParsed"),stats=document.getElementById("stats"),clear=document.getElementById("clear"),generate=document.getElementById("generate"),status=document.getElementById("status"),tool=document.getElementById("document"),format=document.getElementById("format"),help=document.getElementById("inputHelp"),dataCard=document.getElementById("dataCard"),simpleFields=document.getElementById("simpleFields"),containerNumber=document.getElementById("containerNumber"),jdnNumber=document.getElementById("jdnNumber");
+let mode="",blobUrl=null;
 const fields=[["driver","Водитель"],["car","Автомобиль"],["plate","Госномер"],["passportSeries","Серия паспорта"],["passportNumber","Номер паспорта"],["issuedBy","Кем выдан"],["passportDate","Дата выдачи паспорта"],["phone","Телефон"],["recipient","Получатель"],["dt","ДТ"],["do","ДО"],["jdn","ЖДН / CMR"],["invoice","Инвойс"],["invoiceDate","Дата инвойса"],["ref","REF"],["places","Количество мест"],["weight","Вес брутто"]];
 const NS="http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 function clean(s){return String(s||"").replace(/\u00a0/g," ").replace(/[ \t]+/g," ").trim()}
@@ -270,10 +258,101 @@ async function fillDoc(d){
   const buf=await zip.generateAsync({type:"blob",compression:"DEFLATE"});
   return{blob:buf,filename:`Заявка_и_доверенность_${(d.plate||"готово").replace(/[\/\\:*?"<>|]/g,"")}.docx`};
 }
+
+async function downloadLetter(){
+  const r=await ПисьмоПеревод.build(containerNumber.value,jdnNumber.value);
+  if(blobUrl)URL.revokeObjectURL(blobUrl);
+  blobUrl=URL.createObjectURL(r.blob);
+  status.innerHTML=`<div class="result"><strong>✓ Word-документ готов</strong><a class="download-link" href="${blobUrl}" download="${r.filename}">Скачать ${r.filename}</a></div>`;
+}
+function syncTool(){
+  const selected=String(tool.value||"");
+  mode=selected;
+  const hasTool=!!selected;
+  dataCard.classList.toggle("data-card-hidden",!hasTool);
+  input.hidden=selected==="письмо";
+  simpleFields.hidden=selected!=="письмо";
+  document.getElementById("parsedFields").hidden=true;
+  input.value="";
+  containerNumber.value="";
+  jdnNumber.value="";
+  status.innerHTML="";
+  if(selected==="проработка"){
+    help.textContent="Вставьте диапазон из Excel.";
+    format.textContent="Excel (.xlsx)";
+    generate.textContent="Сформировать документ";
+  }else if(selected==="письмо"){
+    help.textContent="Укажите номер контейнера и номер ЖДН. Дата будет проставлена автоматически.";
+    format.textContent="Word (.docx)";
+    generate.textContent="Сформировать документ";
+  }else if(selected==="заявка"){
+    help.textContent="Порядок сведений не важен — Помощник попробует распознать поля автоматически.";
+    format.textContent="Word (.docx)";
+    generate.textContent="Распознать данные";
+  }else{
+    help.textContent="Сначала выберите документ.";
+    format.textContent="—";
+    generate.textContent="Сформировать документ";
+  }
+  if(selected==="проработка")Proработка.update();
+  else if(selected==="заявка")update();
+  else generate.disabled=true;
+}
+
 async function downloadDoc(){const r=await fillDoc(values());if(blobUrl)URL.revokeObjectURL(blobUrl);blobUrl=URL.createObjectURL(r.blob);status.innerHTML=`<div class="result"><strong>✓ Word-документ готов</strong><a class="download-link" href="${blobUrl}" download="${r.filename}">Скачать ${r.filename}</a></div>`}
-function update(){generate.disabled=!input.value.trim();if(input.value.trim())stats.textContent="Текст готов к распознаванию";else stats.textContent="Данные не введены"}
-tool.onchange=()=>{mode=tool.value;help.textContent=mode==="проработка"?"Вставьте диапазон из Excel.":"Порядок сведений не важен — Помощник распознает поля по структуре текста.";format.textContent=mode==="проработка"?"Excel (.xlsx)":"Word (.docx)";generate.textContent=mode==="проработка"?"Сформировать документ":"Распознать данные";input.value="";document.getElementById("parsedFields").hidden=true;if(mode==="проработка")Proработка.update();else update()};
-input.oninput=()=>{if(mode==="проработка")Proработка.update();else{update();if(!document.getElementById("parsedFields").hidden)stats.textContent="Текст изменён — нажмите «Обновить распознанные данные»"}};
+function update(){
+  generate.disabled=!input.value.trim();
+  if(input.value.trim())stats.textContent="Текст готов к распознаванию";
+  else stats.textContent="Данные не введены";
+}
+tool.onchange=syncTool;
+input.oninput=()=>{
+  if(mode==="проработка")Proработка.update();
+  else if(mode==="заявка"){
+    update();
+    if(!document.getElementById("parsedFields").hidden)stats.textContent="Текст изменён — нажмите «Обновить распознанные данные»";
+  }
+};
+if(containerNumber)containerNumber.oninput=()=>{if(mode==="письмо")generate.disabled=!containerNumber.value.trim()||!jdnNumber.value.trim()};
+if(jdnNumber)jdnNumber.oninput=()=>{if(mode==="письмо")generate.disabled=!containerNumber.value.trim()||!jdnNumber.value.trim()};
 if(refreshParsed)refreshParsed.onclick=()=>{if(!input.value.trim())return;status.innerHTML="";render(parse(input.value));};
-clear.onclick=()=>{input.value="";document.getElementById("parsedFields").hidden=true;status.innerHTML="";if(mode==="проработка")Proработка.update();else update()};
-generate.onclick=async()=>{generate.disabled=true;try{if(mode==="проработка"){const r=await Proработка.build();if(blobUrl)URL.revokeObjectURL(blobUrl);blobUrl=URL.createObjectURL(r.blob);status.innerHTML=`<div class="result"><strong>✓ Excel готов</strong><span>${r.text}</span><a class="download-link" href="${blobUrl}" download="${r.filename}">Скачать ${r.filename}</a></div>`;generate.disabled=false;return}if(document.getElementById("parsedFields").hidden){render(parse(input.value));generate.disabled=false}else await downloadDoc()}catch(e){status.innerHTML=`<div class="error"><strong>Ошибка</strong><br>${e.message}</div>`;generate.disabled=false}};
+clear.onclick=()=>{
+  input.value="";
+  containerNumber.value="";
+  jdnNumber.value="";
+  document.getElementById("parsedFields").hidden=true;
+  status.innerHTML="";
+  if(mode==="проработка")Proработка.update();
+  else if(mode==="заявка")update();
+  else if(mode==="письмо")generate.disabled=true;
+};
+generate.onclick=async()=>{
+  generate.disabled=true;
+  try{
+    if(mode==="проработка"){
+      const r=await Proработка.build();
+      if(blobUrl)URL.revokeObjectURL(blobUrl);
+      blobUrl=URL.createObjectURL(r.blob);
+      status.innerHTML=`<div class="result"><strong>✓ Excel готов</strong><span>${r.text}</span><a class="download-link" href="${blobUrl}" download="${r.filename}">Скачать ${r.filename}</a></div>`;
+      generate.disabled=false;
+      return;
+    }
+    if(mode==="письмо"){
+      await downloadLetter();
+      generate.disabled=false;
+      return;
+    }
+    if(mode==="заявка"){
+      if(document.getElementById("parsedFields").hidden){
+        render(parse(input.value));
+        generate.disabled=false;
+      }else{
+        await downloadDoc();
+      }
+    }
+  }catch(e){
+    status.innerHTML=`<div class="error"><strong>Ошибка</strong><br>${e.message}</div>`;
+    generate.disabled=false;
+  }
+};
+syncTool();

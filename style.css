@@ -222,3 +222,8 @@ footer {
         grid-template-columns: 1fr;
     }
 }
+
+.data-card-hidden{display:none}
+.simple-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
+.simple-fields .field input{width:100%;padding:10px;border:1px solid #cbd3da;border-radius:8px;font:14px Arial,sans-serif}
+@media(max-width:620px){.simple-fields{grid-template-columns:1fr}}
