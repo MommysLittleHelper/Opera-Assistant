@@ -40,45 +40,98 @@ const ПисьмоПеревод = {
     if (!dateP) throw Error("В шаблоне не найдено поле даты.");
     replaceParagraphText(dateP, s => /от\s+.*г\./i.test(s), `от ${today}`);
 
-    // Main paragraph with two yellow placeholders.
-    const bodyP = ps.find(p => text(p).includes("груз/ контейнер №") && text(p).includes("накладной СМГС"));
+    // Main paragraph: fill the TWO independent yellow placeholders.
+    // In the Word template the container placeholder is split across two
+    // yellow runs, while the JDN placeholder is a separate yellow run.
+    const bodyP = ps.find(p => {
+      const s = text(p);
+      return s.includes("груз/ контейнер №") && s.includes("накладной СМГС) №");
+    });
     if (!bodyP) throw Error("В шаблоне не найдено поле контейнера и ЖДН.");
 
-    const ts = Array.from(bodyP.getElementsByTagNameNS(NS, "t"));
-    let containerSet = false, jdnSet = false;
-    for (const t of ts) {
-      const v = t.textContent || "";
-      if (!containerSet && /^\s*$/.test(v) && t.parentNode?.getElementsByTagNameNS(NS,"shd").length) {
-        t.textContent = container;
-        containerSet = true;
-        continue;
-      }
-      if (containerSet && !jdnSet && /^\s*$/.test(v) && t.parentNode?.getElementsByTagNameNS(NS,"shd").length) {
-        t.textContent = jdn;
-        jdnSet = true;
-      }
+    const getRuns = p => Array.from(p.getElementsByTagNameNS(NS, "r"));
+    const runText = r => Array.from(r.getElementsByTagNameNS(NS, "t"))
+      .map(n => n.textContent || "").join("");
+
+    const isYellowRun = r => {
+      const shds = Array.from(r.getElementsByTagNameNS(NS, "shd"));
+      return shds.some(el => {
+        const fill = el.getAttributeNS(NS, "fill") || el.getAttribute("w:fill");
+        return String(fill || "").toUpperCase() === "FFFF00";
+      });
+    };
+
+    const runs = getRuns(bodyP);
+    let cursor = 0;
+    const runRanges = runs.map(r => {
+      const value = runText(r);
+      const item = {run:r, text:value, start:cursor, end:cursor + value.length};
+      cursor += value.length;
+      return item;
+    });
+
+    const full = runRanges.map(x => x.text).join("");
+    const containerAnchor = "груз/ контейнер №";
+    const jdnAnchor = "накладной СМГС) №";
+    const ci = full.indexOf(containerAnchor);
+    const ji = full.indexOf(jdnAnchor);
+
+    if (ci < 0 || ji < 0 || ji <= ci) {
+      throw Error("Не удалось определить места контейнера и ЖДН в шаблоне.");
     }
 
-    // Fallback for templates where the placeholder is split differently.
-    if (!containerSet || !jdnSet) {
-      const full = ts.map(n => n.textContent || "").join("");
-      const ci = full.indexOf("груз/ контейнер №");
-      const ji = full.indexOf("накладной СМГС");
-      if (ci >= 0 && ji > ci) {
-        let seenContainer=false, seenJdn=false;
-        for (const t of ts) {
-          const v=t.textContent||"";
-          if (!seenContainer && v.includes("груз/ контейнер №")) {
-            t.textContent=v.replace("груз/ контейнер №","груз/ контейнер № "+container);
-            seenContainer=true;
-          }
-          if (seenContainer && !seenJdn && v.includes("накладной СМГС")) {
-            t.textContent=v.replace("накладной СМГС","накладной СМГС");
-            seenJdn=true;
-          }
-        }
-      }
+    // Put text into every <w:t> of the selected run and clear all
+    // additional yellow runs belonging to the same placeholder.
+    const putInRun = (r, value) => {
+      const ts = Array.from(r.getElementsByTagNameNS(NS, "t"));
+      if (!ts.length) return;
+      ts[0].textContent = value;
+      for (let i = 1; i < ts.length; i++) ts[i].textContent = "";
+    };
+
+    const clearRun = r => {
+      const ts = Array.from(r.getElementsByTagNameNS(NS, "t"));
+      for (const t of ts) t.textContent = "";
+    };
+
+    // Container placeholder ends immediately before the comma.
+    const containerStart = ci + containerAnchor.length;
+    const commaPos = full.indexOf(",", containerStart);
+    const containerEnd = commaPos >= 0 && commaPos < ji ? commaPos : ji;
+
+    const containerRuns = runRanges
+      .filter(x =>
+        x.start >= containerStart &&
+        x.start < containerEnd &&
+        isYellowRun(x.run)
+      );
+
+    if (!containerRuns.length) {
+      throw Error("В шаблоне не найдено жёлтое поле номера контейнера.");
     }
+
+    putInRun(containerRuns[0].run, container);
+    for (let i = 1; i < containerRuns.length; i++) clearRun(containerRuns[i].run);
+
+    // JDN placeholder is the yellow run after the explicit JDN marker,
+    // ending at the following comma.
+    const jdnStart = ji + jdnAnchor.length;
+    const jdnComma = full.indexOf(",", jdnStart);
+    const jdnEnd = jdnComma >= 0 ? jdnComma : full.length;
+
+    const jdnRuns = runRanges
+      .filter(x =>
+        x.start >= jdnStart &&
+        x.start < jdnEnd &&
+        isYellowRun(x.run)
+      );
+
+    if (!jdnRuns.length) {
+      throw Error("В шаблоне не найдено жёлтое поле номера ЖДН.");
+    }
+
+    putInRun(jdnRuns[0].run, jdn);
+    for (let i = 1; i < jdnRuns.length; i++) clearRun(jdnRuns[i].run);
 
     // Remove yellow highlighting from filled template.
     for (const el of Array.from(doc.getElementsByTagNameNS(NS, "shd"))) {
