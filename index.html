@@ -5,13 +5,16 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Помощник Опера</title>
 <link rel="stylesheet" href="style.css">
+<style>.data-card-hidden{display:none}</style>
 </head>
 <body>
 <main>
 <header><div class="eyebrow">РАБОЧИЙ ИНСТРУМЕНТ</div><h1>Помощник Опера</h1><p>Создание операционных документов.</p></header>
 
-<section class="card">
-<span class="num">01</span><h2>Данные</h2>
+<section class="card"><span class="num">01</span><h2>Документ</h2>
+<select id="document"><option value="заявка">Заявка + Доверенность</option><option value="проработка">Проработка</option></select>
+</section><section class="card" id="dataCard" data-hidden="false">
+<span class="num">02</span><h2>Данные</h2>
 <p id="inputHelp">Порядок сведений не важен — Помощник попробует распознать поля автоматически.</p>
 <textarea id="input" spellcheck="false" placeholder="Вставьте сюда данные…"></textarea>
 <div class="meta"><span id="stats">Данные не введены</span><button id="clear" class="secondary" type="button">Очистить</button></div>
@@ -23,7 +26,7 @@
 </div>
 </section>
 
-<section class="card"><span class="num">02</span><h2>Документ</h2>
+<section class="card"><span class="num">01</span><h2>Документ</h2>
 <select id="document"><option value="заявка">Заявка + Доверенность</option><option value="проработка">Проработка</option></select>
 </section>
 

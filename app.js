@@ -1,3 +1,16 @@
+
+// v0.5 ORDER OF ACTIONS
+(function(){
+  const documentEl=document.getElementById("document");
+  const dataCard=document.getElementById("dataCard");
+  if(!documentEl||!dataCard)return;
+  function sync(){
+    dataCard.classList.toggle("data-card-hidden", !String(documentEl.value||"").trim());
+  }
+  sync();
+  documentEl.addEventListener("change",sync);
+})();
+
 const input=document.getElementById("input"),refreshParsed=document.getElementById("refreshParsed"),stats=document.getElementById("stats"),clear=document.getElementById("clear"),generate=document.getElementById("generate"),status=document.getElementById("status"),tool=document.getElementById("document"),format=document.getElementById("format"),help=document.getElementById("inputHelp");
 let mode="заявка",blobUrl=null;
 const fields=[["driver","Водитель"],["car","Автомобиль"],["plate","Госномер"],["passportSeries","Серия паспорта"],["passportNumber","Номер паспорта"],["issuedBy","Кем выдан"],["passportDate","Дата выдачи паспорта"],["phone","Телефон"],["recipient","Получатель"],["dt","ДТ"],["do","ДО"],["jdn","ЖДН / CMR"],["invoice","Инвойс"],["invoiceDate","Дата инвойса"],["ref","REF"],["places","Количество мест"],["weight","Вес брутто"]];
