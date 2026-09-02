@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Помощник Опера</title>
+<link rel="stylesheet" href="style.css">
+<style>.data-card-hidden{display:none}</style>
+</head>
+<body>
+<main>
+<header><div class="eyebrow">РАБОЧИЙ ИНСТРУМЕНТ</div><h1>Помощник Опера</h1><p>Создание операционных документов.</p></header>
+
+<section class="card"><span class="num">01</span><h2>Документ</h2>
+<select id="document"><option value="" selected disabled>Выберите документ…</option><option value="заявка">Заявка + Доверенность</option><option value="проработка">Проработка</option><option value="письмо">Письмо о переводе</option></select>
+</section><section class="card data-card-hidden" id="dataCard">
+<span class="num">02</span><h2>Данные</h2>
+<p id="inputHelp">Сначала выберите документ.</p>
+<textarea id="input" hidden placeholder="Вставьте диапазон из Excel..."></textarea>
+
+<div id="applicationForm" class="application-form" hidden>
+  <div class="form-group"><h3>Водитель и автомобиль</h3><div class="form-grid">
+    <div class="field"><label for="appDriver">ФИО водителя</label><input id="appDriver" type="text" placeholder="Рогозев Владимир Андреевич"></div>
+    <div class="field"><label for="appCar">Автомобиль</label><input id="appCar" type="text" placeholder="GAZELLE NEXT"></div>
+    <div class="field"><label for="appPlate">Госномер</label><input id="appPlate" type="text" placeholder="М229ВА198"></div>
+    <div class="field"><label for="appPhone">Телефон</label><input id="appPhone" type="text" placeholder="8(952)380-12-00"></div>
+  </div></div>
+
+  <div class="form-group"><h3>Паспорт</h3><div class="form-grid">
+    <div class="field"><label for="appPassportSeries">Серия паспорта</label><input id="appPassportSeries" type="text" inputmode="numeric" placeholder="4014"></div>
+    <div class="field"><label for="appPassportNumber">Номер паспорта</label><input id="appPassportNumber" type="text" inputmode="numeric" placeholder="160001"></div>
+    <div class="field field-wide"><label for="appIssuedBy">Кем выдан паспорт</label><input id="appIssuedBy" type="text" placeholder="ТП № 30 отдела УФМС России по Санкт-Петербургу и ЛО"></div>
+    <div class="field"><label for="appPassportDate">Дата выдачи паспорта</label><input id="appPassportDate" type="text" inputmode="numeric" placeholder="14.04.2015"></div>
+  </div></div>
+
+  <div class="form-group"><h3>Данные перевозки</h3><div class="form-grid">
+    <div class="field field-wide"><label for="appRecipient">Получатель</label><input id="appRecipient" type="text" placeholder="ООО СЕВЕРО-ЗАПАДНАЯ ИНСТРУМЕНТАЛЬНАЯ КОМПАНИЯ"></div>
+    <div class="field"><label for="appJdn">ЖДН / CMR</label><input id="appJdn" type="text" placeholder="37964479"></div>
+    <div class="field"><label for="appInvoice">Инвойс</label><input id="appInvoice" type="text" placeholder="31133"></div>
+    <div class="field"><label for="appDt">ДТ</label><input id="appDt" type="text" placeholder="10720020/230826/5032760"></div>
+    <div class="field"><label for="appDo">ДО</label><input id="appDo" type="text" placeholder="0004642"></div>
+    <div class="field"><label for="appRef">REF</label><input id="appRef" type="text" placeholder="RLLXNG2606604"></div>
+    <div class="field"><label for="appPlaces">Количество мест</label><input id="appPlaces" type="text" inputmode="numeric" placeholder="1"></div>
+    <div class="field"><label for="appWeight">Вес брутто, кг</label><input id="appWeight" type="text" inputmode="decimal" placeholder="214"></div>
+  </div></div>
+</div>
+
+<div id="simpleFields" class="simple-fields" hidden aria-label="Данные для письма о переводе">
+<div class="field"><label for="containerNumber">Номер контейнера</label><input id="containerNumber" type="text" placeholder="Например, TEFU4012114"></div>
+<div class="field"><label for="jdnNumber">Номер ЖДН</label><input id="jdnNumber" type="text" placeholder="Например, 36523971"></div></div>
+<div class="meta"><span id="stats">Данные не введены</span><button id="clear" class="secondary" type="button">Очистить</button></div>
+</section>
+
+<section class="card"><span class="num">03</span><h2>Формат</h2><div class="format" id="format">Word (.docx)</div></section>
+<button id="generate" disabled>Сформировать документ</button>
+<div id="status"></div><footer>Данные обрабатываются непосредственно в браузере.</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="письмо_о_переводе.js"></script>
+<script src="заявка.js"></script>
+<script src="проработка.js"></script>
+<script src="app.js"></script>
+</body></html>
