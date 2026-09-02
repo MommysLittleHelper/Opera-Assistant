@@ -129,14 +129,26 @@ const Заявка = (() => {
   }
 
   function render(d){const panel=document.getElementById("parsedFields"),grid=document.getElementById("fieldsGrid");panel.hidden=false;grid.innerHTML=fields.map(([k,l])=>`<div class="field"><label>${l}</label><input data-key="${k}" value="${String(d[k]||"").replace(/"/g,"&quot;")}" class="${d[k]?"":"missing"}">${d[k]?"":"<small>не найдено — можно оставить пустым</small>"}</div>`).join("");grid.querySelectorAll("input").forEach(e=>e.oninput=()=>e.classList.toggle("missing",!e.value.trim()));if(refreshParsed)refreshParsed.disabled=false;stats.textContent="Данные распознаны — проверьте поля";generate.textContent="Сформировать документ"}
+  function formatDate(d){
+    return `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.${d.getFullYear()}`;
+  }
+  function trustDates(){
+    const today=new Date();
+    const expiry=new Date(today.getTime());
+    expiry.setFullYear(expiry.getFullYear()+1);
+    expiry.setMonth(expiry.getMonth()+1);
+    expiry.setDate(expiry.getDate()+1);
+    return {today:formatDate(today),expiry:formatDate(expiry)};
+  }
   function values(){
     const get=id=>{const e=document.getElementById(id);return e?e.value.trim():""};
+    const dates=trustDates();
     return {
       driver:get("appDriver"),car:get("appCar"),plate:get("appPlate"),phone:get("appPhone"),
       passportSeries:get("appPassportSeries"),passportNumber:get("appPassportNumber"),
       issuedBy:get("appIssuedBy"),passportDate:get("appPassportDate"),recipient:get("appRecipient"),
       jdn:get("appJdn"),invoice:get("appInvoice"),dt:get("appDt"),do:get("appDo"),ref:get("appRef"),
-      places:get("appPlaces"),weight:get("appWeight"),today:get("appToday"),expiry:get("appExpiry")
+      places:get("appPlaces"),weight:get("appWeight"),today:dates.today,expiry:dates.expiry
     };
   }
   function textNodes(root){return Array.from(root.getElementsByTagNameNS(NS,"t"))}

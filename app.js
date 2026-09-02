@@ -1,5 +1,5 @@
 const input=document.getElementById("input"),stats=document.getElementById("stats"),clear=document.getElementById("clear"),generate=document.getElementById("generate"),status=document.getElementById("status"),tool=document.getElementById("document"),format=document.getElementById("format"),help=document.getElementById("inputHelp"),dataCard=document.getElementById("dataCard"),simpleFields=document.getElementById("simpleFields"),containerNumber=document.getElementById("containerNumber"),jdnNumber=document.getElementById("jdnNumber"),applicationForm=document.getElementById("applicationForm");
-const appIds=["appDriver","appCar","appPlate","appPhone","appPassportSeries","appPassportNumber","appIssuedBy","appPassportDate","appRecipient","appJdn","appInvoice","appDt","appDo","appRef","appPlaces","appWeight","appToday","appExpiry"];
+const appIds=["appDriver","appCar","appPlate","appPhone","appPassportSeries","appPassportNumber","appIssuedBy","appPassportDate","appRecipient","appJdn","appInvoice","appDt","appDo","appRef","appPlaces","appWeight"];
 const appEls=Object.fromEntries(appIds.map(id=>[id,document.getElementById(id)]));
 let mode="",blobUrl=null;
 
@@ -31,7 +31,6 @@ function syncTool(){
   if(mode==="заявка"){
     help.textContent="Заполните поля вручную. Поля подписаны — распознавание текста больше не требуется.";
     format.textContent="Word (.docx)";generate.textContent="Сформировать документ";
-    if(appEls.appToday&&!appEls.appToday.value)appEls.appToday.value=todayString();
     updateApplicationState();
   }else if(mode==="проработка"){
     help.textContent="Вставьте диапазон из Excel.";format.textContent="Excel (.xlsx)";generate.textContent="Сформировать документ";Proработка.update();
@@ -49,7 +48,6 @@ jdnNumber.oninput=()=>{if(mode==="письмо")generate.disabled=!containerNumb
 clear.onclick=()=>{
   if(mode==="заявка"){
     appIds.forEach(id=>{if(appEls[id])appEls[id].value=""});
-    if(appEls.appToday)appEls.appToday.value=todayString();
     status.innerHTML="";updateApplicationState();
   }else{
     input.value="";containerNumber.value="";jdnNumber.value="";status.innerHTML="";
