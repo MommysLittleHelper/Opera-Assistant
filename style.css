@@ -229,3 +229,9 @@ footer {
 @media(max-width:620px){.simple-fields{grid-template-columns:1fr}}
 
 .source-block{margin-top:14px;padding:16px;border:1px solid #e0e5e9;border-radius:12px;background:#fafbfc}.source-block h3{margin:0 0 5px;font-size:16px}.source-block .hint{margin:0 0 10px!important}.source-block textarea{min-height:120px;background:#fff}.manual-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:620px){.manual-grid{grid-template-columns:1fr}}
+
+
+/* Ручной ввод для Заявки + Доверенности */
+.application-form{margin-top:14px}
+.form-group{padding:16px 0;border-top:1px solid #e0e5e9}.form-group:first-child{border-top:0;padding-top:0}.form-group h3{margin:0 0 12px;font-size:16px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field-wide{grid-column:1 / -1}.field input{min-height:42px}
+@media(max-width:620px){.form-grid{grid-template-columns:1fr}.field-wide{grid-column:auto}}
