@@ -189,6 +189,66 @@ const Заявка = (() => {
     return p ? setParagraphMarker(p,needle,value) : false;
   }
 
+  function yellowRuns(node){
+    return Array.from(node.getElementsByTagNameNS(NS,"r")).filter(r=>{
+      const shd=r.getElementsByTagNameNS(NS,"shd")[0];
+      if(!shd)return false;
+      const fill=shd.getAttributeNS(NS,"fill")||shd.getAttribute("w:fill");
+      return String(fill||"").toUpperCase()==="FFFF00";
+    });
+  }
+  function fillYellowRuns(node,value){
+    const runs=yellowRuns(node);
+    if(!runs.length)return false;
+    const textRuns=runs.filter(r=>r.getElementsByTagNameNS(NS,"t").length);
+    if(!textRuns.length)return false;
+    const first=textRuns[0];
+    const ts=Array.from(first.getElementsByTagNameNS(NS,"t"));
+    if(ts.length)ts[0].textContent=value||"";
+    for(let i=1;i<ts.length;i++)ts[i].textContent="";
+    for(const r of textRuns.slice(1)){
+      for(const t of Array.from(r.getElementsByTagNameNS(NS,"t")))t.textContent="";
+    }
+    return true;
+  }
+  function fillYellowParagraph(paragraph, values){
+    const groups=[];
+    for(const r of yellowRuns(paragraph)){
+      if(!groups.length || r.previousElementSibling!==groups[groups.length-1][groups[groups.length-1].length-1]){
+        groups.push([r]);
+      }else{
+        groups[groups.length-1].push(r);
+      }
+    }
+    values.forEach((v,i)=>{if(v!==undefined && groups[i])fillYellowRuns(groups[i][0].parentNode?.parentNode||paragraph,v)});
+  }
+  function fillYellowParagraphGroups(paragraph, values){
+    const runs=yellowRuns(paragraph);
+    if(!runs.length)return;
+    const groups=[];
+    let current=[];
+    let prev=null;
+    for(const r of runs){
+      if(prev && r.previousElementSibling!==prev){groups.push(current);current=[]}
+      current.push(r);prev=r;
+    }
+    if(current.length)groups.push(current);
+    values.forEach((v,i)=>{
+      if(v===undefined || !groups[i])return;
+      const group=groups[i];
+      const first=group.find(r=>r.getElementsByTagNameNS(NS,"t").length);
+      if(!first)return;
+      const ts=Array.from(first.getElementsByTagNameNS(NS,"t"));
+      if(ts.length)ts[0].textContent=v||"";
+      for(let j=1;j<ts.length;j++)ts[j].textContent="";
+      for(const r of group){
+        if(r===first)continue;
+        for(const t of Array.from(r.getElementsByTagNameNS(NS,"t")))t.textContent="";
+      }
+    });
+  }
+  function fillYellowCell(cell,value){if(cell)fillYellowRuns(cell,value)}
+
   async function fillDoc(d){
     const r=await fetch("template.docx",{cache:"no-store"});
     if(!r.ok)throw Error("Не найден Word-шаблон.");
@@ -198,73 +258,55 @@ const Заявка = (() => {
     const xml=await file.async("string");
     const doc=new DOMParser().parseFromString(xml,"application/xml");
     if(doc.getElementsByTagName("parsererror").length)throw Error("Не удалось прочитать Word-шаблон.");
+
     const ps=Array.from(doc.getElementsByTagNameNS(NS,"p"));
-    const paragraph=i=>ps[i]||null;
-    const setP=(i,idx,val)=>{const p=paragraph(i);if(p)setTextAt(p,idx,val)};
-
-    // Заявка: используем текстовые ориентиры из исправленного шаблона.
-    setP(2,1,d.car);setP(2,4,d.plate);
-    setParagraphByText(doc,"Прибывшее за грузом в адрес получателя",d.recipient);
-    setParagraphByText(doc,"ФИО водителя/№ ВУ/паспортные данные",d.driver);
-    setP(5,1,d.passportSeries);setP(5,4,d.passportNumber);
-    setP(5,7,d.issuedBy);setP(5,9,d.passportDate);
-    setP(6,3,d.phone);
-    setP(19,5,d.dt);setP(20,1,d.do);setP(22,5,d.jdn);
-    setP(23,5,d.invoice);setP(24,2,d.ref);
-    setP(25,3,d.places);setP(26,4,d.weight);
-
     const tables=Array.from(doc.getElementsByTagNameNS(NS,"tbl"));
     const rows=tbl=>tbl?Array.from(tbl.children).filter(n=>n.localName==="tr"):[];
     const cells=row=>row?Array.from(row.children).filter(n=>n.localName==="tc"):[];
-    const put=(row,index,val)=>{const c=cells(row);if(c[index])cellText(c[index],val)};
+    const p=i=>ps[i]||null;
+    const cell=(tbl,ri,ci)=>{const rs=rows(tbl);return rs[ri]?cells(rs[ri])[ci]:null};
 
-    // Таблица 0 — верхняя таблица доверенности + её блок с датами.
+    // ЛЕВАЯ СТРАНИЦА. Заполняем только жёлтые места.
+    // Пунктир/подписи вроде «г.н.з.» остаются нетронутыми.
+    fillYellowParagraphGroups(p(2),[d.car,undefined,d.plate]);
+    fillYellowParagraphGroups(p(3),[d.recipient]);
+    fillYellowParagraphGroups(p(4),[d.driver]);
+    fillYellowParagraphGroups(p(5),[d.passportSeries,d.passportNumber,d.issuedBy,d.passportDate]);
+    fillYellowParagraphGroups(p(6),[d.phone]);
+    fillYellowParagraphGroups(p(19),[d.dt]);
+    fillYellowParagraphGroups(p(20),[d.do]);
+    fillYellowParagraphGroups(p(22),[d.jdn]);
+    fillYellowParagraphGroups(p(23),[d.invoice]);
+    fillYellowParagraphGroups(p(24),[d.ref]);
+    fillYellowParagraphGroups(p(25),[d.places]);
+    fillYellowParagraphGroups(p(26),[d.weight ? String(d.weight).replace(/\s*кг\s*$/i,"") : ""]);
+    fillYellowParagraphGroups(p(28),[d.today]);
+
+    // ПРАВАЯ СТРАНИЦА — доверенность. Тоже только жёлтые ячейки.
+    // Фиксированную организацию, поставщика и другие незакрашенные поля НЕ меняем.
     if(tables[0]){
-      const rr=rows(tables[0]);
-      if(rr[1]){
-        if(cells(rr[1])[1])dateCell(cells(rr[1])[1],d.today);
-        if(cells(rr[1])[2])dateCell(cells(rr[1])[2],d.expiry);
-        put(rr[1],3,"Водитель "+(d.driver||""));
-      }
-    }
-
-    // Даты: одна пара дат является источником истины — верхняя таблица.
-    // Нижние поля правой страницы получают ровно те же значения:
-    // «Дата выдачи» = дата выдачи из верхней таблицы,
-    // «Доверенность действительна по» = срок действия из верхней таблицы.
-    // Левая страница: дата ставится в существующее поле «Дата:».
-    setParagraphByText(doc,"Дата:",d.today);
-
-    // Правая страница: обе нижние даты находятся в таблице 0.
-    // Используем те же значения, что и в верхней строке, без поиска
-    // по тексту абзацев — это исключает смещение дат.
-    if(tables[0]){
-      const rr=rows(tables[0]);
-      if(rr[14]){
-        const c=cells(rr[14]);
-        if(c[1])dateCell(c[1],d.today);
-      }
-      if(rr[15]){
-        const c=cells(rr[15]);
-        if(c[1])dateCell(c[1],d.expiry);
-      }
+      fillYellowCell(cell(tables[0],1,1),d.today);
+      fillYellowCell(cell(tables[0],1,2),d.expiry);
+      fillYellowCell(cell(tables[0],1,3),"Водитель "+(d.driver||""));
+      fillYellowCell(cell(tables[0],14,1),d.today);
+      fillYellowCell(cell(tables[0],15,1),d.expiry);
     }
 
     if(tables[1]){
-      const rr=rows(tables[1]);
-      if(rr[2])put(rr[2],4,d.driver);
-      if(rr[4]){put(rr[4],1,d.passportSeries);put(rr[4],3,d.passportNumber)}
-      if(rr[5])put(rr[5],1,d.issuedBy);
-      if(rr[6])put(rr[6],1,d.passportDate);
-      if(rr[7])put(rr[7],1,d.recipient);
-      if(rr[9])put(rr[9],1,"ДТ "+(d.dt||""));
-    }
-    if(tables[2]){
-      const rr=rows(tables[2]);
-      if(rr[1])put(rr[1],3,d.places||"");
+      fillYellowCell(cell(tables[1],2,4),d.driver);
+      fillYellowCell(cell(tables[1],4,1),d.passportSeries);
+      fillYellowCell(cell(tables[1],4,3),d.passportNumber);
+      fillYellowCell(cell(tables[1],5,1),d.issuedBy);
+      fillYellowCell(cell(tables[1],6,1),d.passportDate);
+      // row 7 contains fixed supplier/organization text — deliberately untouched.
+      fillYellowCell(cell(tables[1],9,1),d.dt ? "ДТ "+d.dt : "");
     }
 
-    // Удаляем только жёлтую подсветку/заливку, не трогая прочее форматирование.
+    if(tables[2]){
+      fillYellowCell(cell(tables[2],1,3),d.places);
+    }
+
+    // Снимаем жёлтую заливку после заполнения, но не удаляем текст/форматирование.
     for(const el of Array.from(doc.getElementsByTagNameNS(NS,"shd"))){
       const fill=el.getAttributeNS(NS,"fill")||el.getAttribute("w:fill");
       if(String(fill||"").toUpperCase()==="FFFF00" && el.parentNode)el.parentNode.removeChild(el);
@@ -279,6 +321,7 @@ const Заявка = (() => {
     const buf=await zip.generateAsync({type:"blob",compression:"DEFLATE"});
     return{blob:buf,filename:`Заявка_и_доверенность_${(d.plate||"готово").replace(/[\/\\:*?"<>|]/g,"")}.docx`};
   }
+
   function parseSources(driverText, transportText, manual={}) {
     const d = parse(`${driverText || ""}\n${transportText || ""}`);
     if (manual.places) d.places=String(manual.places).trim();
