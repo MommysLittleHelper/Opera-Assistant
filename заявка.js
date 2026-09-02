@@ -197,7 +197,11 @@ const Заявка = (() => {
       return String(fill||"").toUpperCase()==="FFFF00";
     });
   }
+  function cleanInsertedValue(value){
+    return String(value ?? "").replace(/[\\t\\r\\n ]+/g," ").trim();
+  }
   function fillYellowRuns(node,value){
+    value=cleanInsertedValue(value);
     const runs=yellowRuns(node);
     if(!runs.length)return false;
     const textRuns=runs.filter(r=>r.getElementsByTagNameNS(NS,"t").length);
@@ -210,17 +214,6 @@ const Заявка = (() => {
       for(const t of Array.from(r.getElementsByTagNameNS(NS,"t")))t.textContent="";
     }
     return true;
-  }
-  function fillYellowParagraph(paragraph, values){
-    const groups=[];
-    for(const r of yellowRuns(paragraph)){
-      if(!groups.length || r.previousElementSibling!==groups[groups.length-1][groups[groups.length-1].length-1]){
-        groups.push([r]);
-      }else{
-        groups[groups.length-1].push(r);
-      }
-    }
-    values.forEach((v,i)=>{if(v!==undefined && groups[i])fillYellowRuns(groups[i][0].parentNode?.parentNode||paragraph,v)});
   }
   function fillYellowParagraphGroups(paragraph, values){
     const runs=yellowRuns(paragraph);
@@ -268,7 +261,7 @@ const Заявка = (() => {
 
     // ЛЕВАЯ СТРАНИЦА. Заполняем только жёлтые места.
     // Пунктир/подписи вроде «г.н.з.» остаются нетронутыми.
-    fillYellowParagraphGroups(p(2),[d.car,undefined,d.plate]);
+    fillYellowParagraphGroups(p(2),[d.car,d.plate]);
     fillYellowParagraphGroups(p(3),[d.recipient]);
     fillYellowParagraphGroups(p(4),[d.driver]);
     fillYellowParagraphGroups(p(5),[d.passportSeries,d.passportNumber,d.issuedBy,d.passportDate]);
@@ -287,7 +280,7 @@ const Заявка = (() => {
     if(tables[0]){
       fillYellowCell(cell(tables[0],1,1),d.today);
       fillYellowCell(cell(tables[0],1,2),d.expiry);
-      fillYellowCell(cell(tables[0],1,3),"Водитель "+(d.driver||""));
+      fillYellowCell(cell(tables[0],1,3),d.driver);
       fillYellowCell(cell(tables[0],14,1),d.today);
       fillYellowCell(cell(tables[0],15,1),d.expiry);
     }
