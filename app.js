@@ -1,4 +1,4 @@
-const input=document.getElementById("input"),stats=document.getElementById("stats"),clear=document.getElementById("clear"),generate=document.getElementById("generate"),status=document.getElementById("status"),tool=document.getElementById("document"),format=document.getElementById("format"),help=document.getElementById("inputHelp"),dataCard=document.getElementById("dataCard"),simpleFields=document.getElementById("simpleFields"),containerNumber=document.getElementById("containerNumber"),jdnNumber=document.getElementById("jdnNumber"),applicationForm=document.getElementById("applicationForm");
+const input=document.getElementById("input"),stats=document.getElementById("stats"),clear=document.getElementById("clear"),generate=document.getElementById("generate"),status=document.getElementById("status"),tool=document.getElementById("document"),format=document.getElementById("format"),help=document.getElementById("inputHelp"),dataCard=document.getElementById("dataCard"),simpleFields=document.getElementById("simpleFields"),containerNumber=document.getElementById("containerNumber"),jdnNumber=document.getElementById("jdnNumber"),applicationForm=document.getElementById("applicationForm"),splitFields=document.getElementById("splitFields"),splitTable=document.getElementById("splitTable"),splitSums=document.getElementById("splitSums");
 const appIds=["appDriver","appCar","appPlate","appPhone","appPassportSeries","appPassportNumber","appIssuedBy","appPassportDate","appRecipient","appJdn","appInvoice","appDt","appDo","appRef","appPlaces","appWeight"];
 const appEls=Object.fromEntries(appIds.map(id=>[id,document.getElementById(id)]));
 let mode="",blobUrl=null;
@@ -26,14 +26,16 @@ function syncTool(){
   dataCard.classList.toggle("data-card-hidden",!mode);
   applicationForm.hidden=mode!=="заявка";
   input.hidden=mode!=="проработка";
-  simpleFields.hidden=mode!=="письмо";
+  simpleFields.hidden=mode!=="письмо";splitFields.hidden=mode!=="разбивка";
   status.innerHTML="";
   if(mode==="заявка"){
     help.textContent="Заполните поля вручную. Поля подписаны — распознавание текста больше не требуется.";
     format.textContent="Word (.docx)";generate.textContent="Сформировать документ";
     updateApplicationState();
+  }else if(mode==="разбивка"){help.textContent="Вставьте таблицу и список сумм.";format.textContent="Excel (.xlsx)";generate.textContent="Рассчитать";Разбивка.update();
   }else if(mode==="проработка"){
     help.textContent="Вставьте диапазон из Excel.";format.textContent="Excel (.xlsx)";generate.textContent="Сформировать документ";Proработка.update();
+  }else if(mode==="разбивка"){help.textContent="Вставьте таблицу и список сумм.";format.textContent="Excel (.xlsx)";generate.textContent="Рассчитать";Разбивка.update();
   }else if(mode==="письмо"){
     help.textContent="Укажите номер контейнера и номер ЖДН. Дата будет проставлена автоматически.";format.textContent="Word (.docx)";generate.textContent="Сформировать документ";generate.disabled=!containerNumber.value.trim()||!jdnNumber.value.trim();
   }else{
@@ -42,6 +44,8 @@ function syncTool(){
 }
 tool.onchange=syncTool;
 if(input)input.oninput=()=>{if(mode==="проработка")Proработка.update()};
+if(splitTable)splitTable.oninput=()=>{if(mode==="разбивка")Разбивка.update()};
+if(splitSums)splitSums.oninput=()=>{if(mode==="разбивка")Разбивка.update()};
 appIds.forEach(id=>appEls[id]?.addEventListener("input",()=>{if(mode==="заявка")updateApplicationState()}));
 if(containerNumber)containerNumber.oninput=()=>{if(mode==="письмо")generate.disabled=!containerNumber.value.trim()||!jdnNumber.value.trim()};
 if(jdnNumber)jdnNumber.oninput=()=>{if(mode==="письмо")generate.disabled=!containerNumber.value.trim()||!jdnNumber.value.trim()};
@@ -50,13 +54,19 @@ clear.onclick=()=>{
     appIds.forEach(id=>{if(appEls[id])appEls[id].value=""});
     status.innerHTML="";updateApplicationState();
   }else{
-    input.value="";containerNumber.value="";jdnNumber.value="";status.innerHTML="";
-    if(mode==="проработка")Proработка.update();else if(mode==="письмо")generate.disabled=true;
+    input.value="";containerNumber.value="";jdnNumber.value="";
+    if(splitTable)splitTable.value="";
+    if(splitSums)splitSums.value="";
+    status.innerHTML="";
+    if(mode==="проработка")Proработка.update();else if(mode==="разбивка")Разбивка.update();else if(mode==="письмо")generate.disabled=true;
   }
 };
 generate.onclick=async()=>{
   generate.disabled=true;
   try{
+    if(mode==="разбивка"){
+      const r=await Разбивка.build();if(blobUrl)URL.revokeObjectURL(blobUrl);blobUrl=URL.createObjectURL(r.blob);status.innerHTML=`<div class="result"><strong>✓ Excel готов</strong><span>${r.text}</span><a class="download-link" href="${blobUrl}" download="${r.filename}">Скачать ${r.filename}</a></div>`;generate.disabled=false;return
+    }
     if(mode==="проработка"){
       const r=await Proработка.build();if(blobUrl)URL.revokeObjectURL(blobUrl);blobUrl=URL.createObjectURL(r.blob);status.innerHTML=`<div class="result"><strong>✓ Excel готов</strong><span>${r.text}</span><a class="download-link" href="${blobUrl}" download="${r.filename}">Скачать ${r.filename}</a></div>`;generate.disabled=false;return
     }

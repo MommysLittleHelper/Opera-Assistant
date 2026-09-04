@@ -12,7 +12,7 @@
 <header><div class="eyebrow">РАБОЧИЙ ИНСТРУМЕНТ</div><h1>Помощник Опера</h1><p>Создание операционных документов.</p></header>
 
 <section class="card"><span class="num">01</span><h2>Документ</h2>
-<select id="document"><option value="" selected disabled>Выберите документ…</option><option value="заявка">Заявка + Доверенность</option><option value="проработка">Проработка</option><option value="письмо">Письмо о переводе</option></select>
+<select id="document"><option value="" selected disabled>Выберите документ…</option><option value="заявка">Заявка + Доверенность</option><option value="проработка">Проработка</option><option value="разбивка">Разбивка</option><option value="письмо">Письмо о переводе</option></select>
 </section><section class="card data-card-hidden" id="dataCard">
 <span class="num">02</span><h2>Данные</h2>
 <p id="inputHelp">Сначала выберите документ.</p>
@@ -45,6 +45,13 @@
   </div></div>
 </div>
 
+
+<div id="splitFields" class="split-fields" hidden>
+  <div class="form-group"><h3>Таблица</h3><p>Вставьте диапазон из Excel с заголовками «номер ктк», «Коммерческий объем» и «номер заказ легенда».</p><textarea id="splitTable" placeholder="Вставьте диапазон из Excel..."></textarea></div>
+  <div class="form-group"><h3>Суммы</h3><p>Укажите суммы, по одной в строке.</p><textarea id="splitSums" class="short-textarea" placeholder="14225\n19100\n21200"></textarea></div>
+  <div id="splitConditions" class="split-conditions" hidden></div>
+  <div id="splitMessage" class="split-message" hidden>Расчёты сделаны, выберите условия показа</div>
+</div>
 <div id="simpleFields" class="simple-fields" hidden aria-label="Данные для письма о переводе">
 <div class="field"><label for="containerNumber">Номер контейнера</label><input id="containerNumber" type="text" placeholder="Например, TEFU4012114"></div>
 <div class="field"><label for="jdnNumber">Номер ЖДН</label><input id="jdnNumber" type="text" placeholder="Например, 36523971"></div></div>
@@ -61,5 +68,6 @@
 <script src="письмо_о_переводе.js"></script>
 <script src="заявка.js"></script>
 <script src="проработка.js"></script>
+<script src="разбивка.js"></script>
 <script src="app.js"></script>
 </body></html>

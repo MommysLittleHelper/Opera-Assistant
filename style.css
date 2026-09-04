@@ -235,3 +235,5 @@ footer {
 .application-form{margin-top:14px}
 .form-group{padding:16px 0;border-top:1px solid #e0e5e9}.form-group:first-child{border-top:0;padding-top:0}.form-group h3{margin:0 0 12px;font-size:16px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field-wide{grid-column:1 / -1}.field input{min-height:42px}
 @media(max-width:620px){.form-grid{grid-template-columns:1fr}.field-wide{grid-column:auto}}
+
+.split-fields{margin-top:4px}.split-fields textarea{min-height:160px}.split-fields .short-textarea{min-height:100px}.split-conditions{margin-top:18px;border-top:1px solid #e0e5e9;padding-top:16px}.split-row{display:grid;grid-template-columns:180px 1fr;gap:10px;align-items:center;margin:8px 0}.split-row label{font-weight:700}.split-row select{width:100%}.split-message{margin-top:14px;padding:10px 12px;border-radius:8px;background:#f4f6f8;font-size:13px;color:#65717d}@media(max-width:620px){.split-row{grid-template-columns:1fr}}
